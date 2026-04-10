@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "922933676739",
+    "project_id": "codewithgideon",
+    "storage_bucket": "codewithgideon.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:922933676739:android:d3886c2c2bfbcfab1a7076",
+        "android_client_info": {
+          "package_name": "com.codewithgideon.codewithgideon"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTlqMwEur8pAGj6LQ8NfwiLBFlEHvXcdc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
