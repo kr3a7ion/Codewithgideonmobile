@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../../../core/config/payment_config.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../student/data/student_repository.dart';
+import '../../student/models/student_profile_model.dart';
 import '../models/payment_checkout_model.dart';
 
 class PaymentRepository {
@@ -26,9 +27,16 @@ class PaymentRepository {
     required String uid,
     required PaymentFlowKind kind,
   }) async {
-    final profile = await _studentRepository.getStudentProfileByUid(uid);
+    StudentProfileModel? profile;
+    for (var attempt = 0; attempt < 4; attempt++) {
+      profile = await _studentRepository.getStudentProfileByUid(uid);
+      if (profile != null) break;
+      await Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1)));
+    }
     if (profile == null) {
-      throw StateError('Student profile could not be found for payment.');
+      throw StateError(
+        'Student profile could not be found for payment. Please try again in a moment.',
+      );
     }
     final course = await _catalogRepository.getCourseForPath(
       profile.pathId,
@@ -155,14 +163,20 @@ class PaymentRepository {
     final safeWeeks = checkout.maxAllowedWeeks <= 0
         ? 0
         : weeks.clamp(1, checkout.maxAllowedWeeks);
-    final basePrice = safeWeeks * checkout.course.pricePerWeek;
-    final processingFee = ((basePrice * 0.015) + 100).ceil();
+    final split = calculateSplitFee(
+      checkout.course.pricePerWeek,
+      safeWeeks,
+      'upfront',
+    );
     return PaymentPriceBreakdown(
       weeks: safeWeeks,
       weeklyRate: checkout.course.pricePerWeek,
-      basePrice: basePrice,
-      processingFee: processingFee,
-      totalPrice: basePrice + processingFee,
+      basePrice: split.targetRevenue,
+      totalFee: split.totalFees,
+      yourFeeShare: split.yourTotalCost,
+      studentFeeShare: split.studentTotalExtra,
+      totalPrice: split.totalCharged,
+      yourRevenue: split.yourTotalRevenue,
     );
   }
 

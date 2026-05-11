@@ -118,6 +118,7 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
   Widget build(BuildContext context) {
     ref.watch(authControllerProvider);
     ref.watch(unreadMessagesCountProvider);
+    ref.watch(mentorReplyNotificationListenerProvider);
     _preloadIfNeeded();
 
     return AppScreen(

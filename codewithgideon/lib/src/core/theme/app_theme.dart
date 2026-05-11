@@ -97,103 +97,102 @@ class AppTheme {
       ),
     );
 
-    final textTheme = GoogleFonts.manropeTextTheme(base.textTheme)
-        .copyWith(
-          displayLarge: GoogleFonts.sora(
-            fontSize: 40,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.02,
-            letterSpacing: -1.2,
-          ),
-          displayMedium: GoogleFonts.sora(
-            fontSize: 34,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.04,
-            letterSpacing: -0.9,
-          ),
-          displaySmall: GoogleFonts.sora(
-            fontSize: 29,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.08,
-            letterSpacing: -0.8,
-          ),
-          headlineLarge: GoogleFonts.sora(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.12,
-            letterSpacing: -0.6,
-          ),
-          headlineMedium: GoogleFonts.sora(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.14,
-            letterSpacing: -0.4,
-          ),
-          headlineSmall: GoogleFonts.sora(
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.16,
-            letterSpacing: -0.3,
-          ),
-          titleLarge: GoogleFonts.manrope(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.22,
-            letterSpacing: -0.2,
-          ),
-          titleMedium: GoogleFonts.manrope(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.24,
-          ),
-          titleSmall: GoogleFonts.manrope(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: AppColors.foreground,
-            height: 1.25,
-          ),
-          bodyLarge: GoogleFonts.manrope(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: AppColors.foreground,
-            height: 1.52,
-          ),
-          bodyMedium: GoogleFonts.manrope(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: AppColors.foreground,
-            height: 1.55,
-          ),
-          bodySmall: GoogleFonts.manrope(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: AppColors.mutedForeground,
-            height: 1.5,
-          ),
-          labelLarge: GoogleFonts.manrope(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.1,
-          ),
-          labelMedium: GoogleFonts.manrope(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.1,
-          ),
-          labelSmall: GoogleFonts.manrope(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-          ),
-        );
+    final textTheme = GoogleFonts.manropeTextTheme(base.textTheme).copyWith(
+      displayLarge: GoogleFonts.sora(
+        fontSize: 40,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.02,
+        letterSpacing: -1.2,
+      ),
+      displayMedium: GoogleFonts.sora(
+        fontSize: 34,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.04,
+        letterSpacing: -0.9,
+      ),
+      displaySmall: GoogleFonts.sora(
+        fontSize: 29,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.08,
+        letterSpacing: -0.8,
+      ),
+      headlineLarge: GoogleFonts.sora(
+        fontSize: 26,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.12,
+        letterSpacing: -0.6,
+      ),
+      headlineMedium: GoogleFonts.sora(
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.14,
+        letterSpacing: -0.4,
+      ),
+      headlineSmall: GoogleFonts.sora(
+        fontSize: 19,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.16,
+        letterSpacing: -0.3,
+      ),
+      titleLarge: GoogleFonts.manrope(
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.22,
+        letterSpacing: -0.2,
+      ),
+      titleMedium: GoogleFonts.manrope(
+        fontSize: 16,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.24,
+      ),
+      titleSmall: GoogleFonts.manrope(
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        color: AppColors.foreground,
+        height: 1.25,
+      ),
+      bodyLarge: GoogleFonts.manrope(
+        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        color: AppColors.foreground,
+        height: 1.52,
+      ),
+      bodyMedium: GoogleFonts.manrope(
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+        color: AppColors.foreground,
+        height: 1.55,
+      ),
+      bodySmall: GoogleFonts.manrope(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        color: AppColors.mutedForeground,
+        height: 1.5,
+      ),
+      labelLarge: GoogleFonts.manrope(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.1,
+      ),
+      labelMedium: GoogleFonts.manrope(
+        fontSize: 12,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.1,
+      ),
+      labelSmall: GoogleFonts.manrope(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.2,
+      ),
+    );
 
     return base.copyWith(
       textTheme: textTheme,
@@ -201,7 +200,24 @@ class AppTheme {
       dividerColor: AppColors.border,
       canvasColor: AppColors.background,
       splashFactory: NoSplash.splashFactory,
-      appBarTheme: const AppBarTheme(backgroundColor: Colors.transparent),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: AppColors.deepBlueDark,
+        contentTextStyle: textTheme.bodyMedium?.copyWith(color: Colors.white),
+        actionTextColor: AppColors.tealLight,
+        behavior: SnackBarBehavior.floating,
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: AppColors.foreground,
+        textColor: AppColors.foreground,
+      ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white.withValues(alpha: 0.88),
@@ -230,6 +246,25 @@ class AppTheme {
   static ThemeData get darkTheme {
     final light = lightTheme;
     final textTheme = light.textTheme;
+    final darkTextTheme = textTheme
+        .apply(
+          bodyColor: AppColors.darkForeground,
+          displayColor: AppColors.darkForeground,
+        )
+        .copyWith(
+          bodySmall: textTheme.bodySmall?.copyWith(
+            color: AppColors.darkMutedForeground,
+          ),
+          labelLarge: textTheme.labelLarge?.copyWith(
+            color: AppColors.darkForeground,
+          ),
+          labelMedium: textTheme.labelMedium?.copyWith(
+            color: AppColors.darkForeground,
+          ),
+          labelSmall: textTheme.labelSmall?.copyWith(
+            color: AppColors.darkMutedForeground,
+          ),
+        );
 
     return light.copyWith(
       brightness: Brightness.dark,
@@ -246,12 +281,33 @@ class AppTheme {
         onPrimary: AppColors.deepBlueDark,
         onSecondary: AppColors.deepBlueDark,
       ),
-      textTheme: textTheme.apply(
-        bodyColor: AppColors.darkForeground,
-        displayColor: AppColors.darkForeground,
+      textTheme: darkTextTheme,
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: AppColors.darkSurface,
+        surfaceTintColor: Colors.transparent,
+        modalBackgroundColor: AppColors.darkSurface,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: const Color(0xFF152239),
+        contentTextStyle: darkTextTheme.bodyMedium?.copyWith(
+          color: AppColors.darkForeground,
+        ),
+        actionTextColor: AppColors.tealLight,
+        behavior: SnackBarBehavior.floating,
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: AppColors.darkForeground,
+        textColor: AppColors.darkForeground,
       ),
       inputDecorationTheme: light.inputDecorationTheme.copyWith(
         fillColor: Colors.white.withValues(alpha: 0.06),
+        hintStyle: darkTextTheme.bodyMedium?.copyWith(
+          color: AppColors.darkMutedForeground,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(22),
           borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),

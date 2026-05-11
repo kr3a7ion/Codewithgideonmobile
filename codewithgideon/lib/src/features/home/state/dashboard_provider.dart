@@ -9,6 +9,7 @@ import '../../entry/state/auth_provider.dart'
         apiClientProvider,
         firebaseFirestoreProvider,
         sharedPreferencesProvider;
+import '../../resources/data/resource_repository.dart';
 import '../../student/data/student_repository.dart';
 import '../data/dashboard_repository.dart';
 import '../models/student_dashboard_snapshot.dart';
@@ -35,11 +36,19 @@ final studentRepositoryProvider = Provider<StudentRepository>((ref) {
   );
 });
 
+final resourceRepositoryProvider = Provider<ResourceRepository>((ref) {
+  return ResourceRepository(
+    apiClient: ref.watch(apiClientProvider),
+    firebaseFirestore: ref.watch(firebaseFirestoreProvider),
+  );
+});
+
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
   return DashboardRepository(
     apiClient: ref.watch(apiClientProvider),
     catalogRepository: ref.watch(catalogRepositoryProvider),
     cohortRepository: ref.watch(cohortRepositoryProvider),
+    resourceRepository: ref.watch(resourceRepositoryProvider),
     studentRepository: ref.watch(studentRepositoryProvider),
   );
 });

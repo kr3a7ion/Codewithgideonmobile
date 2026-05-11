@@ -12,6 +12,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
+import '../../core/data/demo_data.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
 
@@ -99,7 +100,7 @@ class ClassListScreen extends ConsumerWidget {
                           const PremiumPageHeader(
                             title: 'Classes',
                             subtitle:
-                                'Stay on top of live sessions, upcoming lessons, and premium replay access from one polished schedule.',
+                                'Stay on top of live sessions, upcoming lessons and recorded content.',
                             onDark: true,
                           ),
                           const Gap(18),
@@ -282,6 +283,13 @@ class ClassDetailsScreen extends ConsumerWidget {
           );
         }
 
+        final sessionResources = _classResourcesForSession(
+          resources: dashboard.libraryResources,
+          session: session,
+          pathId: dashboard.path.id,
+          courseId: dashboard.course.id,
+        );
+
         return AppScreen(
           body: SafeArea(
             top: false,
@@ -358,6 +366,71 @@ class ClassDetailsScreen extends ConsumerWidget {
                           height: 1.55,
                         ),
                       ),
+                    ],
+                  ),
+                ),
+                const Gap(18),
+                AppCard(
+                  radius: 28,
+                  color: Theme.of(context).cardColor.withValues(alpha: 0.84),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Class Resources',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const Gap(10),
+                      Text(
+                        sessionResources.isEmpty
+                            ? 'No class-specific files have been linked from the admin dashboard yet.'
+                            : 'These resources were attached to this class from the admin dashboard.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _muted(context),
+                          height: 1.55,
+                        ),
+                      ),
+                      const Gap(14),
+                      if (sessionResources.isEmpty)
+                        AppButton(
+                          label: 'Open Resource Library',
+                          expanded: false,
+                          variant: AppButtonVariant.outline,
+                          leading: const Icon(Icons.folder_open_rounded),
+                          onPressed: () => context.push('/resources'),
+                        )
+                      else
+                        ...sessionResources.map(
+                          (resource) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.deepBlue.withValues(
+                                    alpha: 0.08,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                alignment: Alignment.center,
+                                child: const Icon(
+                                  Icons.folder_open_rounded,
+                                  color: AppColors.deepBlue,
+                                ),
+                              ),
+                              title: Text(resource.name),
+                              subtitle: Text(
+                                '${resource.type} • ${resource.size.isEmpty ? 'Open file' : resource.size}',
+                              ),
+                              trailing: const Icon(Icons.open_in_new_rounded),
+                              onTap: () =>
+                                  _openClassResource(context, resource),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -989,6 +1062,47 @@ Future<void> _openJoinLink(BuildContext context, String url) async {
   if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
     if (!context.mounted) return;
     showAppSnackBar(context, 'Could not open the join link right now.');
+  }
+}
+
+List<CourseResource> _classResourcesForSession({
+  required List<CourseResource> resources,
+  required CohortSessionModel session,
+  required String pathId,
+  required String courseId,
+}) {
+  return resources.where((resource) {
+    final pathMatches =
+        resource.pathId.trim().isEmpty || resource.pathId == pathId;
+    final courseMatches =
+        resource.courseId.trim().isEmpty || resource.courseId == courseId;
+    final sessionMatches = resource.sessionId == session.id;
+    return pathMatches && courseMatches && sessionMatches;
+  }).toList();
+}
+
+Future<void> _openClassResource(
+  BuildContext context,
+  CourseResource resource,
+) async {
+  final rawUrl = resource.url.trim();
+  if (rawUrl.isEmpty) {
+    showAppSnackBar(
+      context,
+      'A file link has not been added yet for ${resource.name}.',
+    );
+    return;
+  }
+
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null) {
+    showAppSnackBar(context, 'This resource link is not valid yet.');
+    return;
+  }
+
+  final didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!didLaunch && context.mounted) {
+    showAppSnackBar(context, 'Could not open ${resource.name} right now.');
   }
 }
 

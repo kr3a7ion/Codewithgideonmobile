@@ -13,6 +13,7 @@ class StudentDashboardSnapshot {
     required this.activeCohort,
     required this.unlockedSessions,
     required this.recordedLessons,
+    required this.libraryResources,
   });
 
   final StudentProfileModel profile;
@@ -21,6 +22,7 @@ class StudentDashboardSnapshot {
   final ActiveCohortModel activeCohort;
   final List<CohortSessionModel> unlockedSessions;
   final List<RecordedLesson> recordedLessons;
+  final List<CourseResource> libraryResources;
 
   bool get hasAnyPending =>
       profile.isPending || profile.hasPendingInitialPayment;

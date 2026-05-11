@@ -266,11 +266,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
-class WelcomeScreen extends StatelessWidget {
+class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authControllerProvider);
+
     return AppScreen(
       body: Stack(
         children: [
@@ -337,6 +339,13 @@ class WelcomeScreen extends StatelessWidget {
                     ),
                     onPressed: () => context.go('/signup'),
                   ),
+                  const Gap(12),
+                  _GoogleAuthButton(
+                    isLoading: authState.isLoading,
+                    onPressed: authState.isLoading
+                        ? null
+                        : () => _handleGoogleStudentAuth(context, ref),
+                  ),
                   const Gap(14),
                   AppButton(
                     label: 'Sign In',
@@ -348,29 +357,36 @@ class WelcomeScreen extends StatelessWidget {
                     onPressed: () => context.go('/login'),
                   ),
                   const Gap(20),
-                  Text.rich(
-                    TextSpan(
-                      style: Theme.of(context).textTheme.bodySmall,
-                      children: const [
-                        TextSpan(text: 'By continuing, you agree to our '),
-                        TextSpan(
-                          text: 'Terms',
-                          style: TextStyle(
-                            color: AppColors.deepBlue,
-                            fontWeight: FontWeight.w800,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        'By continuing, you agree to our Terms and',
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      InkWell(
+                        onTap: () => context.push('/privacy'),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Text(
+                            'Privacy Policy',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.deepBlue,
+                                  fontWeight: FontWeight.w800,
+                                ),
                           ),
                         ),
-                        TextSpan(text: ' and '),
-                        TextSpan(
-                          text: 'Privacy Policy',
-                          style: TextStyle(
-                            color: AppColors.deepBlue,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -402,6 +418,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final validationError = _validateAuthFields(
+      email: _emailController.text,
+      password: _passwordController.text,
+    );
+    if (validationError != null) {
+      showAppSnackBar(context, validationError);
+      return;
+    }
+
     // Give iOS a beat to retract the keyboard before auth redirects the route.
     await _settleKeyboardBeforeRouteChange(context);
     await ref
@@ -430,6 +455,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
     context.go('/enrollment');
+  }
+
+  Future<void> _loginWithGoogle() async {
+    await _handleGoogleStudentAuth(context, ref);
   }
 
   @override
@@ -502,9 +531,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     isLoading: authState.isLoading,
                     onPressed: authState.isLoading ? null : _login,
                   ),
+                  const Gap(12),
+                  _GoogleAuthButton(
+                    isLoading: authState.isLoading,
+                    onPressed: authState.isLoading ? null : _loginWithGoogle,
+                  ),
                   if (authState.errorMessage != null) ...[
                     const Gap(14),
-                    _InlineFormError(message: authState.errorMessage!),
+                    _AuthStatusCard(
+                      message: authState.errorMessage!,
+                      tone: _AuthStatusTone.error,
+                    ),
                   ],
                   const Gap(30),
                   Row(
@@ -569,10 +606,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   }
 
   Future<void> _createAccount() async {
-    if (_passwordController.text != _confirmController.text) {
-      showAppSnackBar(context, "Passwords don't match.");
+    final validationError = _validateSignUpFields(
+      email: _emailController.text,
+      password: _passwordController.text,
+      confirmPassword: _confirmController.text,
+    );
+    if (validationError != null) {
+      showAppSnackBar(context, validationError);
       return;
     }
+
     // Match login by dismissing the keyboard before the auth flow starts.
     await _settleKeyboardBeforeRouteChange(context);
     setState(() => _loading = true);
@@ -597,6 +640,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  Future<void> _signUpWithGoogle() async {
+    await _handleGoogleStudentAuth(context, ref);
   }
 
   @override
@@ -746,7 +793,10 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   ],
                   if (authState.errorMessage != null) ...[
                     const Gap(14),
-                    _InlineFormError(message: authState.errorMessage!),
+                    _AuthStatusCard(
+                      message: authState.errorMessage!,
+                      tone: _AuthStatusTone.error,
+                    ),
                   ],
                   const Gap(18),
                   AppCard(
@@ -798,6 +848,13 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                         ? null
                         : _createAccount,
                   ),
+                  const Gap(12),
+                  _GoogleAuthButton(
+                    isLoading: authState.isLoading,
+                    onPressed: _loading || authState.isLoading
+                        ? null
+                        : _signUpWithGoogle,
+                  ),
                   const Gap(10),
                   Text(
                     'Next, complete your profile and choose how many weeks to unlock.',
@@ -805,31 +862,36 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const Gap(18),
-                  Text.rich(
-                    TextSpan(
-                      style: Theme.of(context).textTheme.bodySmall,
-                      children: const [
-                        TextSpan(
-                          text: 'By creating an account, you agree to our ',
-                        ),
-                        TextSpan(
-                          text: 'Terms of Service',
-                          style: TextStyle(
-                            color: AppColors.teal,
-                            fontWeight: FontWeight.w700,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      Text(
+                        'By creating an account, you agree to our Terms of Service and',
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      InkWell(
+                        onTap: () => context.push('/privacy'),
+                        borderRadius: BorderRadius.circular(999),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 2,
+                          ),
+                          child: Text(
+                            'Privacy Policy',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppColors.teal,
+                                  fontWeight: FontWeight.w700,
+                                ),
                           ),
                         ),
-                        TextSpan(text: ' and '),
-                        TextSpan(
-                          text: 'Privacy Policy',
-                          style: TextStyle(
-                            color: AppColors.teal,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                   const Gap(26),
                   Row(
@@ -1142,15 +1204,15 @@ class _ContinueRegistrationScreenState
             pathTitle: _selectedPath,
           );
       if (!mounted) return;
+      await ref
+          .read(authControllerProvider.notifier)
+          .completeRegistration(EnrollmentStatus.pending);
+      if (!mounted) return;
       if (continueToPayment) {
+        ref.invalidate(dashboardSnapshotProvider);
         context.go('/payment?mode=initial&returnTo=%2Fcontinue-registration');
-        ref
-            .read(authControllerProvider.notifier)
-            .completeRegistration(EnrollmentStatus.pending);
       } else {
-        await ref
-            .read(authControllerProvider.notifier)
-            .completeRegistration(EnrollmentStatus.pending);
+        ref.invalidate(dashboardSnapshotProvider);
         if (!mounted) return;
         context.go('/dashboard');
       }
@@ -1252,7 +1314,10 @@ class _ContinueRegistrationScreenState
                   ),
                   if (_submitError != null) ...[
                     const Gap(16),
-                    _InlineFormError(message: _submitError!),
+                    _AuthStatusCard(
+                      message: _submitError!,
+                      tone: _AuthStatusTone.error,
+                    ),
                   ],
                   const Gap(22),
                   AppTextField(
@@ -1664,20 +1729,44 @@ class _DropdownField<T> extends StatelessWidget {
   }
 }
 
-class _InlineFormError extends StatelessWidget {
-  const _InlineFormError({required this.message});
+enum _AuthStatusTone { error, success, info }
+
+class _AuthStatusCard extends StatelessWidget {
+  const _AuthStatusCard({
+    required this.message,
+    this.tone = _AuthStatusTone.info,
+  });
 
   final String message;
+  final _AuthStatusTone tone;
 
   @override
   Widget build(BuildContext context) {
+    final meta = switch (tone) {
+      _AuthStatusTone.error => (
+        background: AppColors.danger.withValues(alpha: 0.08),
+        border: AppColors.danger.withValues(alpha: 0.18),
+        icon: Icons.error_outline_rounded,
+      ),
+      _AuthStatusTone.success => (
+        background: AppColors.teal.withValues(alpha: 0.08),
+        border: AppColors.teal.withValues(alpha: 0.18),
+        icon: Icons.check_circle_outline_rounded,
+      ),
+      _AuthStatusTone.info => (
+        background: AppColors.deepBlue.withValues(alpha: 0.08),
+        border: AppColors.deepBlue.withValues(alpha: 0.18),
+        icon: Icons.info_outline_rounded,
+      ),
+    };
+
     return AppCard(
-      color: AppColors.danger.withValues(alpha: 0.08),
-      border: Border.all(color: AppColors.danger.withValues(alpha: 0.18)),
+      color: meta.background,
+      border: Border.all(color: meta.border),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.danger),
+          Icon(meta.icon, color: meta.border),
           const Gap(12),
           Expanded(
             child: Text(
@@ -1692,6 +1781,111 @@ class _InlineFormError extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GoogleAuthButton extends StatelessWidget {
+  const _GoogleAuthButton({required this.onPressed, this.isLoading = false});
+
+  final VoidCallback? onPressed;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.foreground,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          side: BorderSide(
+            color: Theme.of(context).dividerColor.withValues(alpha: 0.5),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const _GoogleMark(),
+            const Gap(12),
+            Flexible(
+              child: Text(
+                isLoading ? 'Please wait...' : 'Continue with Google',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GoogleMark extends StatelessWidget {
+  const _GoogleMark();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: const Size.square(20),
+      painter: _GoogleMarkPainter(),
+    );
+  }
+}
+
+class _GoogleMarkPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = size.width * 0.18;
+    final radius = (size.width - stroke) / 2;
+    final center = Offset(size.width / 2, size.height / 2);
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    final blue = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    final red = Paint()
+      ..color = const Color(0xFFEA4335)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    final yellow = Paint()
+      ..color = const Color(0xFFFBBC05)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    final green = Paint()
+      ..color = const Color(0xFF34A853)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, -0.25, 1.2, false, blue);
+    canvas.drawArc(rect, 0.98, 0.95, false, red);
+    canvas.drawArc(rect, 1.98, 0.95, false, yellow);
+    canvas.drawArc(rect, 2.98, 1.1, false, green);
+
+    final bar = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(size.width * 0.53, size.height * 0.5),
+      Offset(size.width * 0.9, size.height * 0.5),
+      bar,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _FeaturePill extends StatelessWidget {
@@ -1731,10 +1925,82 @@ String _friendlyEntryError(Object error) {
       raw.contains('ClientException')) {
     return 'We could not reach the server. Check your connection and try again.';
   }
+  if (raw.contains('Student profile could not be found for payment')) {
+    return 'We are still syncing your registration. Please wait a moment and try again.';
+  }
   if (raw.isEmpty) {
     return 'Something went wrong. Please try again.';
   }
   return raw;
+}
+
+Future<void> _handleGoogleStudentAuth(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  await _settleKeyboardBeforeRouteChange(context);
+  await ref.read(authControllerProvider.notifier).signInWithGoogle();
+  if (!context.mounted) return;
+
+  final authState = ref.read(authControllerProvider);
+  if (!authState.isAuthenticated) {
+    final error = authState.errorMessage;
+    if (error != null && error.isNotEmpty) {
+      showAppSnackBar(context, error);
+    }
+    return;
+  }
+
+  if (authState.requiresEmailVerification) {
+    context.go('/verify-email');
+    return;
+  }
+
+  if (authState.enrollmentStatus == EnrollmentStatus.enrolled) {
+    await ref.read(dashboardSnapshotProvider.future);
+    if (!context.mounted) return;
+    context.go('/dashboard');
+    return;
+  }
+
+  if (authState.enrollmentStatus == EnrollmentStatus.notRegistered) {
+    await ref.read(catalogRepositoryProvider).getPaths();
+    if (!context.mounted) return;
+    context.go('/continue-registration');
+    return;
+  }
+
+  context.go('/enrollment');
+}
+
+String? _validateAuthFields({required String email, required String password}) {
+  final normalizedEmail = email.trim();
+  if (normalizedEmail.isEmpty) {
+    return 'Enter your email address to continue.';
+  }
+  if (!normalizedEmail.contains('@') || !normalizedEmail.contains('.')) {
+    return 'Enter a valid email address.';
+  }
+  if (password.trim().isEmpty) {
+    return 'Enter your password to continue.';
+  }
+  return null;
+}
+
+String? _validateSignUpFields({
+  required String email,
+  required String password,
+  required String confirmPassword,
+}) {
+  final authError = _validateAuthFields(email: email, password: password);
+  if (authError != null) return authError;
+  if (password.trim().length < 6) {
+    return 'Use a stronger password with at least 6 characters.';
+  }
+  if (password != confirmPassword) {
+    return "Passwords don't match.";
+  }
+  return null;
 }
 
 class _GlowOrb extends StatelessWidget {

@@ -300,9 +300,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       'cohortKey': checkout.profile.cohortKey,
       'expectedAmountKobo': pricing.totalPriceKobo,
       'baseAmountKobo': pricing.basePriceKobo,
-      'processingFeeKobo': pricing.processingFeeKobo,
+      'totalFeeKobo': pricing.totalFeeKobo,
+      'yourFeeShareKobo': pricing.yourFeeShareKobo,
+      'studentFeeShareKobo': pricing.studentFeeShareKobo,
       'baseAmount': pricing.basePrice,
       'weeklyRate': pricing.weeklyRate,
+      'yourRevenue': pricing.yourRevenue,
       'app': 'codewithgideon-mobile',
       'ts': DateTime.now().millisecondsSinceEpoch,
     };
@@ -416,7 +419,7 @@ class _PaymentHero extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.92),
             ),
           ),
-          const Gap(12),
+          const Gap(8),
           Text(
             checkout.kind == PaymentFlowKind.topUp
                 ? 'Add more access and keep your class schedule moving.'
@@ -456,14 +459,16 @@ class _PaymentSummaryCard extends StatelessWidget {
             value: _formatNaira(pricing.basePrice),
           ),
           _SummaryRow(
-            label: 'Processing fee',
-            value: _formatNaira(pricing.processingFee),
+            label: 'Paystack fee',
+            value: _formatNaira(pricing.totalFee - pricing.yourFeeShare),
           ),
+
           const Divider(height: 28),
           _SummaryRow(
-            label: 'Total',
+            label: 'Total Charge',
             value: _formatNaira(pricing.totalPrice),
             emphasize: true,
+          
           ),
         ],
       ),

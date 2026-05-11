@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../core/data/demo_data.dart';
@@ -55,6 +56,12 @@ class RecordedPlayerScreen extends ConsumerWidget {
             break;
           }
         }
+        final matchingLessons = dashboard.recordedLessons
+            .where((item) => item.id == lessonId)
+            .toList();
+        final relatedLesson = matchingLessons.isEmpty
+            ? null
+            : matchingLessons.first;
 
         if (session == null) {
           return const AppScreen(
@@ -70,16 +77,25 @@ class RecordedPlayerScreen extends ConsumerWidget {
           );
         }
 
-        return AppScreen(body: _ProtectedRecordedPlayer(session: session));
+        return AppScreen(
+          body: _ProtectedRecordedPlayer(
+            session: session,
+            relatedResources: relatedLesson?.resources ?? const [],
+          ),
+        );
       },
     );
   }
 }
 
 class _ProtectedRecordedPlayer extends StatefulWidget {
-  const _ProtectedRecordedPlayer({required this.session});
+  const _ProtectedRecordedPlayer({
+    required this.session,
+    required this.relatedResources,
+  });
 
   final CohortSessionModel session;
+  final List<CourseResource> relatedResources;
 
   @override
   State<_ProtectedRecordedPlayer> createState() =>
@@ -165,6 +181,7 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
     if (player == null) {
       return _RecordedPlayerLayout(
         session: widget.session,
+        relatedResources: widget.relatedResources,
         status: status,
         isDark: isDark,
         isPlayable: _isPlayable,
@@ -188,6 +205,7 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
       builder: (context, playerWidget) {
         return _RecordedPlayerLayout(
           session: widget.session,
+          relatedResources: widget.relatedResources,
           status: status,
           isDark: isDark,
           isPlayable: _isPlayable,
@@ -203,6 +221,7 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
 class _RecordedPlayerLayout extends StatelessWidget {
   const _RecordedPlayerLayout({
     required this.session,
+    required this.relatedResources,
     required this.status,
     required this.isDark,
     required this.isPlayable,
@@ -212,6 +231,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
   });
 
   final CohortSessionModel session;
+  final List<CourseResource> relatedResources;
   final SessionStatusSnapshot status;
   final bool isDark;
   final bool isPlayable;
@@ -224,7 +244,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
     final theme = Theme.of(context);
 
     return SafeArea(
-      top: !isFullscreen,
+      top: false,
       bottom: false,
       child: Column(
         children: [
@@ -233,7 +253,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(22, 30, 22, 14),
               child: Row(
                 children: [
-                  _OverlayActionButton(
+                  PremiumIconButton(
                     icon: PhosphorIconsBold.arrowLeft,
                     onTap: () => context.pop(),
                     isDark: isDark,
@@ -262,17 +282,6 @@ class _RecordedPlayerLayout extends StatelessWidget {
                         ),
                       ],
                     ),
-                  ),
-                  _OverlayActionButton(
-                    icon: PhosphorIconsBold.user,
-                    onTap: () => context.push('/community/messages'),
-                    isDark: isDark,
-                  ),
-                  const Gap(10),
-                  _OverlayActionButton(
-                    icon: PhosphorIconsBold.folderOpen,
-                    onTap: () => context.push('/resources'),
-                    isDark: isDark,
                   ),
                 ],
               ),
@@ -381,81 +390,80 @@ class _RecordedPlayerLayout extends StatelessWidget {
                         height: 1.65,
                       ),
                     ),
-                    const Gap(18),
+                    const Gap(22),
                     AdaptiveWrap(
-                      minItemWidth: 150,
-                      spacing: 10,
-                      runSpacing: 10,
+                      minItemWidth: 148,
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
-                        _RecordedAction(
-                          icon: PhosphorIconsBold.checkCircle,
-                          title: 'Mark Complete',
-                          color: Colors.green,
-                          onTap: () => showAppSnackBar(
-                            context,
-                            'Completion tracking can be connected next.',
-                          ),
-                        ),
-                        _RecordedAction(
-                          icon: PhosphorIconsBold.user,
-                          title: 'Ask Mentor',
-                          color: AppColors.purple,
+                        _RecordedShortcutCard(
+                          icon: Icons.support_agent_rounded,
+                          accent: AppColors.purple,
+                          title: 'Mentor',
+                          subtitle: 'Ask a follow up',
                           onTap: () => context.push('/ai-tutor/${session.id}'),
-                        ),
-                        _RecordedAction(
-                          icon: PhosphorIconsBold.folderOpen,
-                          title: 'Resources',
-                          color: Colors.blue,
-                          onTap: () => context.push('/resources'),
                         ),
                       ],
                     ),
+                    const Gap(22),
+                    Text(
+                      'Session Resources',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Gap(8),
+                    Text(
+                      relatedResources.isEmpty
+                          ? 'No lesson-specific downloads are published yet. Check the main library for shared course materials.'
+                          : 'These files were linked to this recording.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: isDark ? Colors.white70 : Colors.black54,
+                        height: 1.55,
+                      ),
+                    ),
+                    const Gap(14),
+                    if (relatedResources.isEmpty)
+                      _RecordedShortcutCard(
+                        icon: Icons.folder_open_rounded,
+                        accent: AppColors.deepBlue,
+                        title: 'Full Library',
+                        subtitle: 'Browse all published files',
+                        onTap: () => context.push('/resources'),
+                      )
+                    else
+                      for (final resource in relatedResources)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: AppCard(
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                width: 46,
+                                height: 46,
+                                decoration: BoxDecoration(
+                                  color: _resourceBadgeColor(resource.type),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: Icon(
+                                  _resourceIcon(resource.type),
+                                  color: _resourceAccentColor(resource.type),
+                                ),
+                              ),
+                              title: Text(resource.name),
+                              subtitle: Text(
+                                '${resource.type} • ${resource.size.isEmpty ? 'Open file' : resource.size} • ${resource.date}',
+                              ),
+                              trailing: const Icon(Icons.open_in_new_rounded),
+                              onTap: () => _openResource(context, resource),
+                            ),
+                          ),
+                        ),
                   ],
                 ),
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _OverlayActionButton extends StatelessWidget {
-  const _OverlayActionButton({
-    required this.icon,
-    required this.onTap,
-    required this.isDark,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : Colors.black.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : Colors.black.withValues(alpha: 0.08),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          icon,
-          color: isDark ? Colors.white : Colors.black,
-          size: 20,
-        ),
       ),
     );
   }
@@ -504,6 +512,69 @@ class _PlayerPill extends StatelessWidget {
   }
 }
 
+class _RecordedShortcutCard extends StatelessWidget {
+  const _RecordedShortcutCard({
+    required this.icon,
+    required this.accent,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: AppCard(
+        radius: 22,
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, color: accent, size: 20),
+            ),
+            const Gap(12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Gap(4),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_rounded, color: accent, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 String? _extractYoutubeId(Uri uri) {
   final host = uri.host.toLowerCase();
   if (host.contains('youtu.be')) {
@@ -520,242 +591,466 @@ String? _extractYoutubeId(Uri uri) {
   return null;
 }
 
-class ResourcesLibraryScreen extends StatefulWidget {
+class ResourcesLibraryScreen extends ConsumerStatefulWidget {
   const ResourcesLibraryScreen({super.key});
 
   @override
-  State<ResourcesLibraryScreen> createState() => _ResourcesLibraryScreenState();
+  ConsumerState<ResourcesLibraryScreen> createState() =>
+      _ResourcesLibraryScreenState();
 }
 
-class _ResourcesLibraryScreenState extends State<ResourcesLibraryScreen> {
+class _ResourcesLibraryScreenState
+    extends ConsumerState<ResourcesLibraryScreen> {
   String _query = '';
   String _filter = 'all';
 
   @override
   Widget build(BuildContext context) {
-    final resources = DemoData.libraryResources.where((resource) {
-      final filterMatches =
-          _filter == 'all' ||
-          (_filter == 'pdf' && resource.type.toLowerCase() == 'pdf') ||
-          (_filter == 'code' && resource.type.toLowerCase() != 'pdf') ||
-          (_filter == 'video' && resource.type.toLowerCase() == 'video');
-      final queryMatches =
-          _query.isEmpty ||
-          resource.name.toLowerCase().contains(_query.toLowerCase()) ||
-          resource.folder.toLowerCase().contains(_query.toLowerCase());
-      return filterMatches && queryMatches;
-    }).toList();
+    final dashboardState = ref.watch(dashboardSnapshotProvider);
 
-    return AppScreen(
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: AppGradients.primary,
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(36),
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  PremiumPageHeader(
-                    title: 'Resources',
-                    subtitle:
-                        'Browse class notes, downloads, and curated materials with quick search.',
-                    leading: PremiumIconButton(
-                      icon: Icons.arrow_back_rounded,
-                      onTap: () => context.pop(),
-                      isDark: true,
+    return dashboardState.when(
+      loading: () => const AppScreen(
+        body: SafeArea(
+          top: false,
+          child: AppLoadingState(
+            compact: true,
+            title: 'Loading resources...',
+            message: 'Syncing the latest published files from your dashboard.',
+          ),
+        ),
+      ),
+      error: (error, _) => AppScreen(
+        body: SafeArea(
+          top: false,
+          child: AppErrorState(
+            compact: true,
+            title: 'Resources unavailable',
+            message: 'We could not load your published learning resources yet.',
+            onRetry: () => ref.refresh(dashboardSnapshotProvider),
+          ),
+        ),
+      ),
+      data: (dashboard) {
+        final allResources = dashboard.libraryResources;
+        final resources = allResources.where((resource) {
+          final filterMatches = _resourceMatchesFilter(_filter, resource);
+          final queryMatches =
+              _query.isEmpty ||
+              resource.name.toLowerCase().contains(_query.toLowerCase()) ||
+              resource.folder.toLowerCase().contains(_query.toLowerCase());
+          return filterMatches && queryMatches;
+        }).toList();
+        final folders = _buildFolderCounts(allResources);
+        final videoCount = allResources
+            .where((resource) => resource.type.toLowerCase() == 'video')
+            .length;
+        final codeCount = allResources
+            .where((resource) => resource.type.toLowerCase() == 'code')
+            .length;
+        final pdfCount = allResources
+            .where((resource) => resource.type.toLowerCase() == 'pdf')
+            .length;
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+
+        return AppScreen(
+          body: SafeArea(
+            top: false,
+            bottom: false,
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: isDark
+                        ? const LinearGradient(
+                            colors: [
+                              AppColors.deepBlueDark,
+                              Color(0xFF11274A),
+                              AppColors.tealDark,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : AppGradients.primary,
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(36),
                     ),
-                    onDark: true,
                   ),
-                  const Gap(10),
-                  TextField(
-                    onChanged: (value) => setState(() => _query = value),
-                    decoration: InputDecoration(
-                      hintText: 'Search resources...',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      fillColor: Colors.white,
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(22),
-                        borderSide: const BorderSide(
-                          color: AppColors.teal,
-                          width: 1.6,
+                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PremiumPageHeader(
+                        title: 'Resources',
+                        subtitle:
+                            'Browse admin-published class notes, downloads, and curated materials with quick search.',
+                        leading: PremiumIconButton(
+                          icon: Icons.arrow_back_rounded,
+                          onTap: () => context.pop(),
+                          isDark: true,
                         ),
+                        onDark: true,
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async {
-                  await Future<void>.delayed(const Duration(milliseconds: 600));
-                },
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
-                  children: [
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
+                      const Gap(18),
+                      Row(
                         children: [
-                          for (final filter in const [
-                            'all',
-                            'pdf',
-                            'code',
-                            'video',
-                          ]) ...[
-                            _FilterChip(
-                              label: filter,
-                              active: _filter == filter,
-                              onTap: () => setState(() => _filter = filter),
-                            ),
-                            const Gap(10),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const Gap(20),
-                    Text(
-                      'Folders',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Gap(12),
-                    AdaptiveWrap(
-                      minItemWidth: 150,
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        for (final folder in DemoData.libraryFolders)
-                          AppCard(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 46,
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: folder.$1 == 'Projects'
-                                          ? const [
-                                              AppColors.orange,
-                                              AppColors.orangeLight,
-                                            ]
-                                          : folder.$1 == 'Week 2 - Advanced'
-                                          ? const [
-                                              AppColors.purple,
-                                              Color(0xFFA78BFA),
-                                            ]
-                                          : const [
-                                              Color(0xFF3B82F6),
-                                              Color(0xFF2563EB),
-                                            ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: const Icon(
-                                    Icons.folder_rounded,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                const Gap(12),
-                                Text(
-                                  folder.$1,
-                                  style: Theme.of(context).textTheme.labelLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                const Gap(6),
-                                Text(
-                                  '${folder.$2} files',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
+                          Expanded(
+                            child: _ResourceHeroStat(
+                              label: 'Published',
+                              value: '${allResources.length}',
                             ),
                           ),
-                      ],
-                    ),
-                    const Gap(22),
-                    Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 12,
-                      runSpacing: 12,
+                          const Gap(10),
+                          Expanded(
+                            child: _ResourceHeroStat(
+                              label: 'Folders',
+                              value: '${folders.length}',
+                            ),
+                          ),
+                          const Gap(10),
+                          Expanded(
+                            child: _ResourceHeroStat(
+                              label: 'Video',
+                              value: '$videoCount',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Gap(16),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: TextField(
+                          onChanged: (value) => setState(() => _query = value),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Search resources, folders, or file types...',
+                            hintStyle: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.darkMutedForeground,
+                                ),
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: Colors.white.withValues(alpha: 0.86),
+                            ),
+                            fillColor: Colors.transparent,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(22),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(22),
+                              borderSide: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.22),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: () async {
+                      ref.invalidate(dashboardSnapshotProvider);
+                      await ref.read(dashboardSnapshotProvider.future);
+                    },
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(22, 18, 22, 28),
                       children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkSurface.withValues(alpha: 0.84)
+                                : Colors.white.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).dividerColor.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _LibraryMetaChip(
+                                  icon: Icons.description_outlined,
+                                  label: 'PDF',
+                                  value: '$pdfCount files',
+                                  accent: const Color(0xFF2563EB),
+                                ),
+                              ),
+                              const Gap(10),
+                              Expanded(
+                                child: _LibraryMetaChip(
+                                  icon: Icons.code_rounded,
+                                  label: 'Code',
+                                  value: '$codeCount items',
+                                  accent: AppColors.purple,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Gap(16),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              for (final filter in const [
+                                'all',
+                                'pdf',
+                                'code',
+                                'video',
+                              ]) ...[
+                                _FilterChip(
+                                  label: filter,
+                                  active: _filter == filter,
+                                  onTap: () => setState(() => _filter = filter),
+                                ),
+                                const Gap(10),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const Gap(20),
                         Text(
-                          'All Resources',
+                          'Folders',
                           style: Theme.of(context).textTheme.titleLarge
                               ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text('Sort by'),
-                        ),
-                      ],
-                    ),
-                    const Gap(12),
-                    if (resources.isEmpty)
-                      AppEmptyState(
-                        title: 'No matching resources',
-                        message:
-                            'Try a broader search term or switch the selected filter.',
-                        icon: Icons.folder_off_rounded,
-                        action: AppButton(
-                          label: 'Clear Filters',
-                          expanded: false,
-                          onPressed: () {
-                            setState(() {
-                              _query = '';
-                              _filter = 'all';
-                            });
-                          },
-                        ),
-                      )
-                    else
-                      for (final resource in resources)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: AppCard(
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFDBEAFE),
-                                  borderRadius: BorderRadius.circular(16),
+                        const Gap(12),
+                        if (folders.isEmpty)
+                          AppCard(
+                            child: Text(
+                              'No published folders yet. Resources added from the admin dashboard will appear here.',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          )
+                        else
+                          AdaptiveWrap(
+                            minItemWidth: 150,
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              for (
+                                var index = 0;
+                                index < folders.length;
+                                index++
+                              )
+                                AppCard(
+                                  color: isDark
+                                      ? const Color(0xFF111C2E)
+                                      : Theme.of(context).cardColor,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 46,
+                                        height: 46,
+                                        decoration: BoxDecoration(
+                                          gradient: _folderGradient(index),
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.folder_rounded,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const Gap(12),
+                                      Text(
+                                        folders[index].$1,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelLarge
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      const Gap(6),
+                                      Text(
+                                        '${folders[index].$2} files',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.copyWith(
+                                          color: _resourceMutedColor(context),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                                child: const Icon(
-                                  Icons.description_outlined,
-                                  color: Colors.blue,
-                                ),
-                              ),
-                              title: Text(resource.name),
-                              subtitle: Text(
-                                '${resource.type} • ${resource.size} • ${resource.date}',
-                              ),
-                              trailing: const Icon(Icons.download_rounded),
-                              onTap: () => showAppSnackBar(
-                                context,
-                                'Download placeholder for ${resource.name}',
+                            ],
+                          ),
+                        const Gap(22),
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            Text(
+                              'All Resources',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(fontWeight: FontWeight.w800),
+                            ),
+                            Text(
+                              '${allResources.length} published',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: _resourceMutedColor(context),
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const Gap(12),
+                        if (allResources.isEmpty)
+                          AppEmptyState(
+                            title: 'No resources published yet',
+                            message:
+                                'The admin dashboard has not published any course files for your enrollment yet.',
+                            icon: Icons.folder_off_rounded,
+                          )
+                        else if (resources.isEmpty)
+                          AppEmptyState(
+                            title: 'No matching resources',
+                            message:
+                                'Try a broader search term or switch the selected filter.',
+                            icon: Icons.folder_off_rounded,
+                            action: AppButton(
+                              label: 'Clear Filters',
+                              expanded: false,
+                              onPressed: () {
+                                setState(() {
+                                  _query = '';
+                                  _filter = 'all';
+                                });
+                              },
+                            ),
+                          )
+                        else
+                          for (final resource in resources)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _ResourceListTile(
+                                resource: resource,
+                                onTap: () => _openResource(context, resource),
                               ),
                             ),
-                          ),
-                        ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
+  }
+}
+
+bool _resourceMatchesFilter(String filter, CourseResource resource) {
+  final type = resource.type.toLowerCase();
+  return filter == 'all' ||
+      (filter == 'pdf' && type == 'pdf') ||
+      (filter == 'code' && type == 'code') ||
+      (filter == 'video' && type == 'video');
+}
+
+List<(String, int)> _buildFolderCounts(List<CourseResource> resources) {
+  final counts = <String, int>{};
+  for (final resource in resources) {
+    final folder = resource.folder.trim().isEmpty ? 'General' : resource.folder;
+    counts.update(folder, (value) => value + 1, ifAbsent: () => 1);
+  }
+  final folders =
+      counts.entries.map((entry) => (entry.key, entry.value)).toList()
+        ..sort((a, b) => a.$1.compareTo(b.$1));
+  return folders;
+}
+
+LinearGradient _folderGradient(int index) {
+  const palette = <List<Color>>[
+    [AppColors.orange, AppColors.orangeLight],
+    [AppColors.purple, Color(0xFFA78BFA)],
+    [Color(0xFF3B82F6), Color(0xFF2563EB)],
+    [AppColors.teal, AppColors.tealLight],
+  ];
+  final colors = palette[index % palette.length];
+  return LinearGradient(colors: colors);
+}
+
+IconData _resourceIcon(String type) {
+  switch (type.toLowerCase()) {
+    case 'video':
+      return Icons.ondemand_video_rounded;
+    case 'code':
+      return Icons.code_rounded;
+    case 'link':
+      return Icons.link_rounded;
+    default:
+      return Icons.description_outlined;
+  }
+}
+
+Color _resourceBadgeColor(String type, {bool isDark = false}) {
+  switch (type.toLowerCase()) {
+    case 'video':
+      return isDark ? const Color(0xFF3C2A12) : const Color(0xFFFEF3C7);
+    case 'code':
+      return isDark ? const Color(0xFF24183E) : const Color(0xFFEDE9FE);
+    case 'link':
+      return isDark ? const Color(0xFF132A1D) : const Color(0xFFDCFCE7);
+    default:
+      return isDark ? const Color(0xFF16253B) : const Color(0xFFDBEAFE);
+  }
+}
+
+Color _resourceAccentColor(String type) {
+  switch (type.toLowerCase()) {
+    case 'video':
+      return const Color(0xFFD97706);
+    case 'code':
+      return const Color(0xFF7C3AED);
+    case 'link':
+      return const Color(0xFF15803D);
+    default:
+      return Colors.blue;
+  }
+}
+
+Future<void> _openResource(
+  BuildContext context,
+  CourseResource resource,
+) async {
+  final rawUrl = resource.url.trim();
+  if (rawUrl.isEmpty) {
+    showAppSnackBar(
+      context,
+      'A file link has not been added yet for ${resource.name}.',
+    );
+    return;
+  }
+
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null) {
+    showAppSnackBar(context, 'This resource link is not valid yet.');
+    return;
+  }
+
+  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!launched && context.mounted) {
+    showAppSnackBar(context, 'Could not open ${resource.name} right now.');
   }
 }
 
@@ -1021,49 +1316,6 @@ class _AiTutorScreenState extends ConsumerState<AiTutorScreen> {
   }
 }
 
-class _RecordedAction extends StatelessWidget {
-  const _RecordedAction({
-    required this.icon,
-    required this.title,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(22),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 28),
-            const Gap(10),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: color,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _FilterChip extends StatelessWidget {
   const _FilterChip({
     required this.label,
@@ -1077,24 +1329,249 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AppColors.deepBlue : Colors.white,
+          color: active
+              ? AppColors.deepBlue
+              : (isDark ? AppColors.darkSurface : Colors.white),
           borderRadius: BorderRadius.circular(999),
-          boxShadow: active ? null : AppShadows.card,
+          border: active
+              ? null
+              : Border.all(
+                  color: isDark
+                      ? AppColors.darkBorder
+                      : AppColors.border.withValues(alpha: 0.8),
+                ),
+          boxShadow: active || isDark ? null : AppShadows.card,
         ),
         child: Text(
           label[0].toUpperCase() + label.substring(1),
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: active ? Colors.white : AppColors.foreground,
+            color: active
+                ? Colors.white
+                : (isDark ? AppColors.darkForeground : AppColors.foreground),
             fontWeight: FontWeight.w800,
           ),
         ),
       ),
     );
   }
+}
+
+class _ResourceHeroStat extends StatelessWidget {
+  const _ResourceHeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.darkMutedForeground,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Gap(6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LibraryMetaChip extends StatelessWidget {
+  const _LibraryMetaChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: isDark ? 0.16 : 0.08),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: isDark ? 0.2 : 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: accent, size: 18),
+          ),
+          const Gap(12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: _resourceMutedColor(context),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Gap(4),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResourceListTile extends StatelessWidget {
+  const _ResourceListTile({required this.resource, required this.onTap});
+
+  final CourseResource resource;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = _resourceAccentColor(resource.type);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Ink(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF111C2E) : Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: accent.withValues(alpha: isDark ? 0.3 : 0.12)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: _resourceBadgeColor(resource.type, isDark: isDark),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(_resourceIcon(resource.type), color: accent),
+            ),
+            const Gap(14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    resource.name,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Gap(8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _ResourceInfoPill(
+                        label: resource.type.toUpperCase(),
+                        accent: accent,
+                      ),
+                      _ResourceInfoPill(
+                        label: resource.folder.trim().isEmpty
+                            ? 'General'
+                            : resource.folder,
+                      ),
+                    ],
+                  ),
+                  const Gap(10),
+                  Text(
+                    '${resource.size.isEmpty ? 'Open file' : resource.size} • ${resource.date}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _resourceMutedColor(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Gap(10),
+            Icon(Icons.open_in_new_rounded, color: accent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResourceInfoPill extends StatelessWidget {
+  const _ResourceInfoPill({required this.label, this.accent});
+
+  final String label;
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pillAccent = accent ?? _resourceMutedColor(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: pillAccent.withValues(alpha: isDark ? 0.18 : 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: pillAccent,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+Color _resourceMutedColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? AppColors.darkMutedForeground
+      : AppColors.mutedForeground;
 }

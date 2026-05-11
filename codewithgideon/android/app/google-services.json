@@ -12,7 +12,20 @@
           "package_name": "com.codewithgideon.codewithgideon"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "922933676739-bcgn5kukvb31i97oom5lcf88kcr6couu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.codewithgideon.codewithgideon",
+            "certificate_hash": "fbe5383d78d2eaee15fce98df8bedf80a728ce87"
+          }
+        },
+        {
+          "client_id": "922933676739-sstigs8ar50dbadjo1ta2h7acumia9k3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDTlqMwEur8pAGj6LQ8NfwiLBFlEHvXcdc"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "922933676739-sstigs8ar50dbadjo1ta2h7acumia9k3.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "922933676739-hbrcjaj9u0f5hauavgbtj9d7albr1elt.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.codewithgideon.codewithgideon"
+              }
+            }
+          ]
         }
       }
     }

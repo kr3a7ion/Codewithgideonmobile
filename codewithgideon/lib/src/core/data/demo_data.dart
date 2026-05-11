@@ -7,6 +7,14 @@ class CourseResource {
     required this.size,
     this.date = '',
     this.folder = '',
+    this.url = '',
+    this.description = '',
+    this.pathId = '',
+    this.courseId = '',
+    this.sessionId = '',
+    this.sessionWeek,
+    this.isPublished = true,
+    this.updatedAt,
   });
 
   final String name;
@@ -14,6 +22,16 @@ class CourseResource {
   final String size;
   final String date;
   final String folder;
+  final String url;
+  final String description;
+  final String pathId;
+  final String courseId;
+  final String sessionId;
+  final int? sessionWeek;
+  final bool isPublished;
+  final DateTime? updatedAt;
+
+  bool get hasExternalUrl => url.trim().isNotEmpty;
 }
 
 enum ClassStatus { upcoming, live, completed }

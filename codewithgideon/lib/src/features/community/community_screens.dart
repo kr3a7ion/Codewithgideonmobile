@@ -1,416 +1,509 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/data/demo_data.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../cohorts/models/cohort_message_model.dart';
 import '../cohorts/models/cohort_session_model.dart';
+import '../entry/state/auth_provider.dart';
 import '../home/models/student_dashboard_snapshot.dart';
 import '../home/state/dashboard_provider.dart';
-import '../community/state/community_notifications_provider.dart';
+import 'models/community_space_model.dart';
 import 'models/mentor_request_model.dart';
+import 'state/community_notifications_provider.dart';
+import 'state/community_spaces_provider.dart';
 import 'state/mentor_request_provider.dart';
 
-class CommunityChannelsScreen extends StatefulWidget {
+class CommunityChannelsScreen extends ConsumerStatefulWidget {
   const CommunityChannelsScreen({super.key});
 
   @override
-  State<CommunityChannelsScreen> createState() =>
+  ConsumerState<CommunityChannelsScreen> createState() =>
       _CommunityChannelsScreenState();
 }
 
-class _CommunityChannelsScreenState extends State<CommunityChannelsScreen> {
+class _CommunityChannelsScreenState
+    extends ConsumerState<CommunityChannelsScreen> {
+  final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final channels = DemoData.channels
-        .where(
-          (item) =>
-              _query.isEmpty ||
-              item.name.toLowerCase().contains(_query.toLowerCase()) ||
-              item.description.toLowerCase().contains(_query.toLowerCase()),
-        )
-        .toList();
+    final dashboard = ref.watch(dashboardSnapshotProvider);
+    final spaces = ref.watch(communitySpacesProvider);
+    final unreadCount = ref.watch(unreadMessagesCountProvider);
+    final mentorMessages = ref.watch(
+      mentorRequestsProvider(
+        const MentorConversationQuery(sessionId: null, conversationId: null),
+      ),
+    );
 
     return DoubleBackToExitScope(
-      child: SafeArea(
-        top: false,
-        bottom: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 30, 22, 14),
-                child: AppCard(
-                  radius: 32,
-                  shadow: AppShadows.premium,
-                  child: Column(
-                    children: [
-                      Consumer(
-                        builder: (context, ref, child) {
-                          final unreadCountAsync = ref.watch(
-                            unreadMessagesCountProvider,
-                          );
-                          return PremiumPageHeader(
-                            title: 'Community',
-                            subtitle:
-                                'Join thoughtful student spaces, browse updates, and keep mentor conversations close.',
-                            trailing: Stack(
-                              clipBehavior: Clip.none,
-                              children: [
-                                PremiumIconButton(
-                                  icon: Icons.chat_bubble_outline_rounded,
-                                  onTap: () =>
-                                      context.push('/community/messages'),
+      child: AppScreen(
+        body: SafeArea(
+          top: false,
+          bottom: false,
+          child: dashboard.when(
+            loading: () => const AppLoadingState(
+              title: 'Loading community',
+              message: 'Preparing your mentor support and student spaces.',
+            ),
+            error: (error, stackTrace) => AppErrorState(
+              title: 'Could not load community',
+              message:
+                  'We could not prepare your community home right now. Please try again.',
+              onRetry: () {
+                ref.invalidate(dashboardSnapshotProvider);
+                ref.invalidate(communitySpacesProvider);
+              },
+            ),
+            data: (snapshot) {
+              final route = _mentorRouteForDashboard(snapshot) ?? '/mentor';
+              final liveSpacesCount = spaces.maybeWhen(
+                data: (items) => items.length,
+                orElse: () => 0,
+              );
+              final latestMentorReply = mentorMessages.maybeWhen(
+                data: (items) =>
+                    _latestMentorChat(items.where((m) => m.isAdmin).toList()),
+                orElse: () => null,
+              );
+              final filteredSpaces = spaces.maybeWhen(
+                data: (items) => items.where(_matchesQuery).toList(),
+                orElse: () => const <CommunitySpaceModel>[],
+              );
+              final unreadLabel = unreadCount.maybeWhen(
+                data: (count) => count == 0 ? 'Inbox clear' : '$count unread',
+                orElse: () => 'Checking inbox',
+              );
+
+              return CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(22, 28, 22, 16),
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                        decoration: BoxDecoration(
+                          gradient: Theme.of(context).brightness == Brightness.dark
+                              ? const LinearGradient(
+                                  colors: [
+                                    AppColors.deepBlueDark,
+                                    Color(0xFF0E2348),
+                                    AppColors.tealDark,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                )
+                              : const LinearGradient(
+                                  colors: [
+                                    Color(0xFF0E2C63),
+                                    Color(0xFF1C4986),
+                                    Color(0xFF117781),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                                if (unreadCountAsync.maybeWhen(
-                                  data: (count) => count > 0,
-                                  orElse: () => false,
-                                ))
-                                  Positioned(
-                                    right: -2,
-                                    top: -2,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      decoration: const BoxDecoration(
-                                        color: AppColors.orange,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 18,
-                                        minHeight: 18,
-                                      ),
-                                      child: unreadCountAsync.maybeWhen(
-                                        data: (count) => Text(
-                                          count > 99 ? '99+' : '$count',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall
-                                              ?.copyWith(color: Colors.white),
-                                          textAlign: TextAlign.center,
+                          borderRadius: BorderRadius.circular(32),
+                          boxShadow: AppShadows.premium,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            PremiumPageHeader(
+                              title: 'Community',
+                              subtitle:
+                                  'Mentor help, student rooms, and course resources arranged like one learning hub.',
+                              onDark: true,
+                              trailing: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  PremiumIconButton(
+                                    icon: Icons.notifications_none_rounded,
+                                    onTap: () =>
+                                        context.push('/community/messages'),
+                                  ),
+                                  if (unreadCount.maybeWhen(
+                                    data: (count) => count > 0,
+                                    orElse: () => false,
+                                  ))
+                                    Positioned(
+                                      top: -2,
+                                      right: -2,
+                                      child: Container(
+                                        constraints: const BoxConstraints(
+                                          minWidth: 18,
+                                          minHeight: 18,
                                         ),
-                                        orElse: () => const SizedBox.shrink(),
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.orange,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: unreadCount.maybeWhen(
+                                          data: (count) => Text(
+                                            count > 99 ? '99+' : '$count',
+                                            textAlign: TextAlign.center,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .labelSmall
+                                                ?.copyWith(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                          ),
+                                          orElse: () => const SizedBox.shrink(),
+                                        ),
                                       ),
                                     ),
+                                ],
+                              ),
+                            ),
+                            const Gap(18),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _CommunityHeroStat(
+                                    label: 'Mentor',
+                                    value: latestMentorReply == null
+                                        ? 'Listening'
+                                        : 'Reply ready',
                                   ),
+                                ),
+                                const Gap(10),
+                                Expanded(
+                                  child: _CommunityHeroStat(
+                                    label: 'Rooms',
+                                    value: '$liveSpacesCount live',
+                                  ),
+                                ),
+                                const Gap(10),
+                                Expanded(
+                                  child: _CommunityHeroStat(
+                                    label: 'Library',
+                                    value:
+                                        '${snapshot.libraryResources.length} files',
+                                  ),
+                                ),
                               ],
                             ),
-                          );
-                        },
-                      ),
-                      const Gap(18),
-                      TextField(
-                        onChanged: (value) => setState(() => _query = value),
-                        decoration: InputDecoration(
-                          hintText: 'Search channels...',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(22),
-                            borderSide: const BorderSide(
-                              color: AppColors.teal,
-                              width: 1.6,
+                            const Gap(18),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                ),
+                              ),
+                              child: TextField(
+                                controller: _searchController,
+                                onChanged: (value) => setState(() {
+                                  _query = value.trim().toLowerCase();
+                                }),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: Colors.white),
+                                decoration: InputDecoration(
+                                  hintText: 'Search your student spaces...',
+                                  hintStyle: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: AppColors.darkMutedForeground,
+                                      ),
+                                  prefixIcon: Icon(
+                                    Icons.search_rounded,
+                                    color: Colors.white.withValues(alpha: 0.86),
+                                  ),
+                                  suffixIcon: _query.isEmpty
+                                      ? null
+                                      : IconButton(
+                                          onPressed: () {
+                                            _searchController.clear();
+                                            setState(() {
+                                              _query = '';
+                                            });
+                                          },
+                                          icon: Icon(
+                                            Icons.close_rounded,
+                                            color: Colors.white.withValues(
+                                              alpha: 0.86,
+                                            ),
+                                          ),
+                                        ),
+                                  fillColor: Colors.transparent,
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(22),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(22),
+                                    borderSide: BorderSide(
+                                      color: Colors.white.withValues(alpha: 0.22),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Quick Access',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w800),
+                              ),
+                              const Spacer(),
+                              Text(
+                                unreadLabel,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: _contextMutedColor(context),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          const Gap(12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _ConnectedFeatureCard(
+                                  icon: Icons.support_agent_rounded,
+                                  accent: AppColors.tealDark,
+                                  title: 'Mentor Support',
+                                  eyebrow: snapshot.heroLabel,
+                                  description: latestMentorReply == null
+                                      ? 'Open your private mentor thread for quick support and feedback.'
+                                      : latestMentorReply.body,
+                                  onTap: () => context.push(route),
+                                  badge: latestMentorReply == null
+                                      ? null
+                                      : 'Reply ready',
+                                ),
+                              ),
+                              const Gap(12),
+                              Expanded(
+                                child: _ConnectedFeatureCard(
+                                  icon: Icons.menu_book_rounded,
+                                  accent: AppColors.deepBlueLight,
+                                  title: 'Resource Library',
+                                  eyebrow:
+                                      '${snapshot.libraryResources.length} published',
+                                  description:
+                                      'Open class-ready notes, links, and downloads.',
+                                  onTap: () => context.push('/resources'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(22, 2, 22, 130),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        Row(
+                          children: [
+                            Text(
+                              'Student Spaces',
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: _contextMutedColor(context),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const Spacer(),
+                            spaces.maybeWhen(
+                              data: (items) => Text(
+                                '${items.length} published',
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: _contextMutedColor(context),
+                                    ),
+                              ),
+                              orElse: () => const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                        const Gap(12),
+                        Text(
+                          'Tap into rooms curated for your cohort and path, with cleaner handoff into each community channel.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: _contextMutedColor(context),
+                            height: 1.5,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 130),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  Row(
-                    children: [
-                      Text(
-                        'Channels',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: AppColors.mutedForeground,
-                          fontWeight: FontWeight.w800,
+                        const Gap(14),
+                        spaces.when(
+                          loading: () => const AppLoadingState(
+                            title: 'Loading spaces',
+                            message: 'Pulling the latest rooms.',
+                            compact: true,
+                          ),
+                          error: (error, stackTrace) => AppErrorState(
+                            title: 'Could not load spaces',
+                            message:
+                                'Student spaces are temporarily unavailable. Please try again.',
+                            onRetry: () =>
+                                ref.invalidate(communitySpacesProvider),
+                          ),
+                          data: (_) {
+                            if (filteredSpaces.isEmpty) {
+                              return AppEmptyState(
+                                title: _query.isEmpty
+                                    ? 'No student spaces yet'
+                                    : 'No matching spaces',
+                                message: _query.isEmpty
+                                    ? 'No published room for this cohort yet.'
+                                    : 'Try another keyword or clear the search to see every published room.',
+                                icon: Icons.forum_outlined,
+                              );
+                            }
+
+                            return Column(
+                              children: [
+                                for (final space in filteredSpaces) ...[
+                                  _CommunitySpaceTile(space: space),
+                                  const Gap(12),
+                                ],
+                              ],
+                            );
+                          },
                         ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${channels.length} total',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+                      ]),
+                    ),
                   ),
-                  const Gap(12),
-                  if (channels.isEmpty)
-                    AppEmptyState(
-                      title: 'No channels found',
-                      message:
-                          'Try another keyword or clear your search to see every space.',
-                      icon: Icons.forum_outlined,
-                      action: AppButton(
-                        label: 'Clear Search',
-                        expanded: false,
-                        onPressed: () => setState(() => _query = ''),
-                      ),
-                    )
-                  else
-                    for (var index = 0; index < channels.length; index++)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child:
-                            _ChannelCard(
-                                  channel: channels[index],
-                                  onTap: () => context.push(
-                                    '/community/chat/${channels[index].id}',
-                                  ),
-                                )
-                                .animate()
-                                .fadeIn(delay: (index * 60).ms)
-                                .slideY(begin: 0.12),
-                      ),
-                ]),
-              ),
-            ),
-          ],
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
+
+  bool _matchesQuery(CommunitySpaceModel space) {
+    if (_query.isEmpty) return true;
+    return space.title.toLowerCase().contains(_query) ||
+        space.description.toLowerCase().contains(_query) ||
+        (space.category ?? '').toLowerCase().contains(_query);
+  }
 }
 
-class ClassChatScreen extends StatefulWidget {
+class ClassChatScreen extends ConsumerWidget {
   const ClassChatScreen({super.key, required this.channelId});
 
   final String channelId;
 
   @override
-  State<ClassChatScreen> createState() => _ClassChatScreenState();
-}
-
-class _ClassChatScreenState extends State<ClassChatScreen> {
-  final _controller = TextEditingController();
-  late final List<CommunityMessage> _messages = [...DemoData.communityMessages];
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _send() {
-    if (_controller.text.trim().isEmpty) return;
-    setState(() {
-      _messages.add(
-        CommunityMessage(
-          id: '${_messages.length + 1}',
-          user: 'You',
-          avatar: 'ME',
-          message: _controller.text.trim(),
-          time: 'Now',
-          isUser: true,
-        ),
-      );
-      _controller.clear();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final channel = DemoData.channel(widget.channelId);
-
+  Widget build(BuildContext context, WidgetRef ref) {
+    final space = ref.watch(communitySpaceByIdProvider(channelId));
     return AppScreen(
       body: SafeArea(
         top: false,
         bottom: false,
-        child: Column(
-          children: [
-            Container(
-              decoration: const BoxDecoration(gradient: AppGradients.primary),
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 18),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: PremiumPageHeader(
-                      title: '#${channel.name}',
-                      subtitle: '${channel.members} members active',
+        child: space == null
+            ? AppEmptyState(
+                title: 'Space unavailable',
+                message:
+                    'This student space is not available for your cohort right now.',
+                icon: Icons.forum_outlined,
+                action: AppButton(
+                  label: 'Back to Community',
+                  expanded: false,
+                  onPressed: () => context.go('/community'),
+                ),
+              )
+            : Padding(
+                padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    PremiumPageHeader(
+                      title: space.title,
+                      subtitle: space.cohortLabel?.trim().isNotEmpty == true
+                          ? space.cohortLabel
+                          : 'Student space',
                       leading: PremiumIconButton(
                         icon: Icons.arrow_back_rounded,
                         onTap: () => context.pop(),
-                        isDark: true,
                       ),
-                      trailing: PremiumIconButton(
-                        icon: Icons.more_vert_rounded,
-                        onTap: () {},
-                        isDark: true,
-                      ),
-                      onDark: true,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(18),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final message = _messages[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: message.isMentor
-                              ? AppColors.orange
-                              : message.isUser
-                              ? AppColors.teal
-                              : Colors.grey.shade500,
-                          child: Text(
-                            message.avatar,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ),
-                        const Gap(12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    const Gap(18),
+                    AppCard(
+                      radius: 28,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
                             children: [
-                              Row(
-                                children: [
-                                  Text(
-                                    message.user,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: message.isMentor
-                                              ? AppColors.orange
-                                              : AppColors.foreground,
-                                          fontWeight: FontWeight.w800,
-                                        ),
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  color: AppColors.deepBlue.withValues(
+                                    alpha: 0.1,
                                   ),
-                                  if (message.isMentor) ...[
-                                    const Gap(8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.orange.withValues(
-                                          alpha: 0.1,
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          999,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        'Mentor',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall
-                                            ?.copyWith(
-                                              color: AppColors.orange,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                    ),
-                                  ],
-                                  const Gap(8),
-                                  Text(
-                                    message.time,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                ],
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  space.icon,
+                                  color: AppColors.deepBlueDark,
+                                ),
                               ),
-                              const Gap(8),
-                              if (message.isCode)
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF111827),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    message.message,
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: const Color(0xFF4ADE80),
-                                          fontFamily: 'monospace',
-                                        ),
-                                  ),
-                                )
-                              else
-                                Text(message.message),
+                              const Gap(14),
+                              Expanded(
+                                child: Text(
+                                  space.description,
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: AppColors.mutedForeground,
+                                        height: 1.55,
+                                      ),
+                                ),
+                              ),
                             ],
                           ),
-                        ),
-                      ],
+                          const Gap(18),
+                          AppButton(
+                            label: space.actionLabel,
+                            onPressed: () =>
+                                _openCommunitySpace(context, space),
+                          ),
+                        ],
+                      ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.code_rounded),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.image_outlined),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                      ),
-                    ),
-                  ),
-                  const Gap(8),
-                  InkWell(
-                    onTap: _send,
-                    borderRadius: BorderRadius.circular(18),
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: const BoxDecoration(
-                        color: AppColors.teal,
-                        borderRadius: BorderRadius.all(Radius.circular(18)),
-                      ),
-                      child: const Icon(
-                        Icons.send_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -423,7 +516,7 @@ class AskMentorScreen extends ConsumerStatefulWidget {
     required this.contextType,
   });
 
-  final String sessionId;
+  final String? sessionId;
   final MentorRequestContext contextType;
 
   @override
@@ -431,7 +524,8 @@ class AskMentorScreen extends ConsumerStatefulWidget {
 }
 
 class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
-  final _controller = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final List<MentorChatMessage> _optimisticMessages = <MentorChatMessage>[];
   bool _isSending = false;
 
   @override
@@ -440,92 +534,19 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) {
-      showAppSnackBar(context, 'Type your question before sending it.');
-      return;
-    }
-    setState(() => _isSending = true);
-
-    try {
-      final dashboard = await ref.read(dashboardSnapshotProvider.future);
-      final session = _resolveSession(dashboard);
-      if (session == null) {
-        throw StateError('We could not find this class context right now.');
-      }
-
-      await ref
-          .read(mentorRequestRepositoryProvider)
-          .submitRequest(
-            dashboard: dashboard,
-            session: session,
-            message: text,
-            contextType: widget.contextType,
-          );
-      _controller.clear();
-      if (!mounted) return;
-      showAppSnackBar(context, 'Your message has been sent.');
-    } catch (error) {
-      if (!mounted) return;
-      showAppSnackBar(context, error.toString());
-    } finally {
-      if (mounted) {
-        setState(() => _isSending = false);
-      }
-    }
-  }
-
-  CohortSessionModel? _resolveSession(StudentDashboardSnapshot dashboard) {
-    for (final item in dashboard.unlockedSessions) {
-      if (item.id == widget.sessionId) return item;
-    }
-    return null;
-  }
-
-  List<Widget> _buildConversationTiles(List<MentorChatMessage> messages) {
-    if (messages.isEmpty) {
-      return const [SliverToBoxAdapter(child: _MentorEmptyConversation())];
-    }
-
-    final tiles = <Widget>[];
-    DateTime? previousDay;
-
-    for (final message in messages) {
-      final currentDay = DateTime(
-        message.createdAt.year,
-        message.createdAt.month,
-        message.createdAt.day,
-      );
-      if (previousDay == null || currentDay != previousDay) {
-        tiles.add(
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: _MentorDayChip(date: message.createdAt),
-            ),
-          ),
-        );
-        previousDay = currentDay;
-      }
-
-      tiles.add(
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _MentorChatBubble(message: message),
-          ),
-        ),
-      );
-    }
-
-    return tiles;
-  }
-
   @override
   Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(dashboardSnapshotProvider);
-    final requestsAsync = ref.watch(mentorRequestsProvider(widget.sessionId));
+    final conversationAsync = ref.watch(
+      mentorRequestsProvider(
+        MentorConversationQuery(
+          sessionId: widget.sessionId,
+          conversationId: null,
+        ),
+      ),
+    );
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final session = dashboardAsync.maybeWhen(
       data: _resolveSession,
       orElse: () => null,
@@ -534,9 +555,36 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     final pathLabel = session?.pathTitle ?? 'Private support channel';
     final contextLabel = widget.contextType == MentorRequestContext.live
         ? 'Live class support'
-        : 'Recorded lesson follow-up';
+        : 'Recorded lesson follow up';
+    final storedMessages = conversationAsync.maybeWhen(
+      data: (items) => items,
+      orElse: () => const <MentorChatMessage>[],
+    );
+    final mergedMessages = mergeChatTimeline(
+      storedMessages,
+      _optimisticMessages,
+    );
+    final syncedOptimistic = reconcileOptimistic(
+      optimistic: _optimisticMessages,
+      persisted: storedMessages,
+    );
+
+    if (syncedOptimistic.length != _optimisticMessages.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() {
+          _optimisticMessages
+            ..clear()
+            ..addAll(syncedOptimistic);
+        });
+      });
+    }
+
+    final isSyncingConversation =
+        conversationAsync.isLoading && storedMessages.isEmpty;
 
     return AppScreen(
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         top: false,
         bottom: false,
@@ -544,128 +592,156 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
           children: [
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF0B3A33),
-                border: Border(
-                  bottom: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.08),
-                  ),
+                gradient: isDark
+                    ? const LinearGradient(
+                        colors: [AppColors.deepBlueDark, Color(0xFF12356D)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : AppGradients.primary,
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(30),
                 ),
               ),
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+              child: Column(
                 children: [
-                  PremiumIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    onTap: () => context.pop(),
-                    isDark: true,
+                  Row(
+                    children: [
+                      PremiumIconButton(
+                        icon: Icons.arrow_back_rounded,
+                        onTap: () => context.pop(),
+                        isDark: true,
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          contextLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const Gap(12),
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.support_agent_rounded,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const Gap(12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Ask Mentor',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
+                  const Gap(14),
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.support_agent_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Gap(12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Mentor Chat',
+                              style: theme.textTheme.titleLarge?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.w800,
                               ),
-                        ),
-                        const Gap(2),
-                        Text(
-                          '$contextLabel • $heading',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.78),
+                            ),
+                            const Gap(4),
+                            Text(
+                              heading,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.86),
+                                fontWeight: FontWeight.w700,
                               ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const Gap(10),
-                  Text(
-                    pathLabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.75),
-                    ),
+                  const Gap(14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _MentorHeaderPill(
+                          icon: Icons.route_outlined,
+                          label: pathLabel,
+                        ),
+                      ),
+                      const Gap(10),
+                      _MentorHeaderPill(
+                        icon: isSyncingConversation
+                            ? Icons.sync_rounded
+                            : mergedMessages.isEmpty
+                            ? Icons.mark_chat_unread_outlined
+                            : Icons.verified_rounded,
+                        label: isSyncingConversation
+                            ? 'Syncing'
+                            : mergedMessages.isEmpty
+                            ? 'Listening'
+                            : 'Synced',
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
             Expanded(
               child: Container(
-                decoration: BoxDecoration(color: const Color(0xFFE8DDD2)),
-                child: requestsAsync.when(
-                  loading: () => const AppLoadingState(
-                    title: 'Loading conversation...',
-                    message:
-                        'We are syncing the latest mentor replies for you.',
-                    compact: true,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppColors.darkBackground
+                      : AppColors.background,
+                ),
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
                   ),
-                  error: (error, _) => Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: AppEmptyState(
-                        title: 'Messages unavailable',
-                        message:
-                            'We could not load this conversation right now.',
-                        icon: Icons.chat_bubble_outline_rounded,
-                        action: AppButton(
-                          label: 'Try Again',
-                          expanded: false,
-                          onPressed: () => ref.invalidate(
-                            mentorRequestsProvider(widget.sessionId),
-                          ),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                        child: Column(
+                          children: [
+                            _MentorIntroBubble(isDark: isDark),
+                            if (mergedMessages.isEmpty)
+                              const _MentorEmptyConversation(),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                  data: (messages) {
-                    return CustomScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(
-                        parent: BouncingScrollPhysics(),
-                      ),
-                      slivers: [
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(16, 14, 16, 4),
-                            child: _MentorIntroBubble(),
-                          ),
-                        ),
-                        ..._buildConversationTiles(messages),
-                        const SliverToBoxAdapter(child: Gap(14)),
-                      ],
-                    );
-                  },
+                    ..._buildConversationTiles(mergedMessages),
+                    const SliverToBoxAdapter(child: Gap(14)),
+                  ],
                 ),
               ),
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
               decoration: BoxDecoration(
-                color: const Color(0xFFF3F0EB),
+                color: isDark ? const Color(0xFF0F182A) : Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.deepBlue.withValues(alpha: 0.05),
+                    color: AppColors.deepBlue.withValues(
+                      alpha: isDark ? 0.14 : 0.05,
+                    ),
                     blurRadius: 18,
                     offset: const Offset(0, -6),
                   ),
@@ -674,24 +750,10 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.mood_rounded,
-                      color: AppColors.mutedForeground,
-                    ),
-                  ),
-                  const Gap(10),
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: isDark ? AppColors.darkSurface : Colors.white,
                         borderRadius: BorderRadius.circular(28),
                       ),
                       padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
@@ -699,8 +761,20 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
                         controller: _controller,
                         minLines: 1,
                         maxLines: 5,
-                        decoration: const InputDecoration(
-                          hintText: 'Message mentor',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isDark
+                              ? AppColors.darkForeground
+                              : AppColors.foreground,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: isSyncingConversation
+                              ? 'Conversation is syncing... you can still type'
+                              : 'Message mentor',
+                          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                            color: isDark
+                                ? AppColors.darkMutedForeground
+                                : AppColors.mutedForeground,
+                          ),
                           border: InputBorder.none,
                         ),
                       ),
@@ -713,21 +787,18 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
                     child: Container(
                       width: 50,
                       height: 50,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF0B8F6A),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppColors.teal : AppColors.deepBlue,
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: _isSending
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.send_rounded, color: Colors.white),
+                      child: Opacity(
+                        opacity: _isSending ? 0.6 : 1,
+                        child: const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -736,6 +807,152 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  CohortSessionModel? _resolveSession(StudentDashboardSnapshot dashboard) {
+    if (widget.sessionId == null) {
+      return dashboard.liveSession ??
+          dashboard.latestUnlockedSession ??
+          dashboard.nextSession ??
+          dashboard.latestRecordedSession;
+    }
+
+    for (final item in dashboard.unlockedSessions) {
+      if (item.id == widget.sessionId) return item;
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    final message = _controller.text.trim();
+    if (message.isEmpty || _isSending) return;
+    final clientMessageId =
+        'client-${DateTime.now().microsecondsSinceEpoch}-${widget.sessionId ?? 'mentor'}';
+
+    final dashboard = await ref.read(dashboardSnapshotProvider.future);
+    final session = _resolveSession(dashboard);
+    if (session == null) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        'We could not find the class context for this mentor chat yet.',
+      );
+      return;
+    }
+
+    final optimistic = MentorChatMessage(
+      id: 'optimistic-${DateTime.now().microsecondsSinceEpoch}',
+      conversationId: '',
+      sessionId: session.id,
+      body: message,
+      senderType: MentorChatSenderType.user,
+      senderName: dashboard.profile.fullName,
+      createdAt: DateTime.now(),
+      senderEmail: dashboard.profile.email,
+      status: 'sending',
+      clientMessageId: clientMessageId,
+    );
+
+    setState(() {
+      _isSending = true;
+      _optimisticMessages.add(optimistic);
+      _controller.clear();
+    });
+    unawaited(_persistOptimisticMessages());
+
+    try {
+      final conversationId = await ref
+          .read(mentorRequestRepositoryProvider)
+          .submitRequest(
+            dashboard: dashboard,
+            session: session,
+            message: message,
+            contextType: widget.contextType,
+            clientMessageId: clientMessageId,
+          );
+      if (conversationId.isNotEmpty) {
+        ref
+                .read(
+                  mentorConversationIdOverrideProvider(
+                    widget.sessionId,
+                  ).notifier,
+                )
+                .state =
+            conversationId;
+      }
+      if (mounted) {
+        setState(() {
+          final index = _optimisticMessages.indexWhere(
+            (item) => item.id == optimistic.id,
+          );
+          if (index >= 0) {
+            _optimisticMessages[index] = MentorChatMessage(
+              id: optimistic.id,
+              conversationId: conversationId,
+              sessionId: optimistic.sessionId,
+              body: optimistic.body,
+              senderType: optimistic.senderType,
+              senderName: optimistic.senderName,
+              createdAt: optimistic.createdAt,
+              senderEmail: optimistic.senderEmail,
+              status: 'sent',
+              source: optimistic.source,
+              clientMessageId: optimistic.clientMessageId,
+              isConversationStarter: optimistic.isConversationStarter,
+            );
+          }
+        });
+      }
+      unawaited(_persistOptimisticMessages());
+      ref.invalidate(
+        mentorRequestsProvider(
+          MentorConversationQuery(
+            sessionId: widget.sessionId,
+            conversationId: conversationId.isEmpty ? null : conversationId,
+          ),
+        ),
+      );
+      ref.invalidate(
+        mentorRequestsProvider(
+          const MentorConversationQuery(sessionId: null, conversationId: null),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _optimisticMessages.removeWhere((item) => item.id == optimistic.id);
+        _controller.text = message;
+        _controller.selection = TextSelection.collapsed(
+          offset: _controller.text.length,
+        );
+      });
+      unawaited(_persistOptimisticMessages());
+      showAppSnackBar(context, 'Message not sent. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _persistOptimisticMessages() async {
+    final authState = ref.read(authControllerProvider);
+    final session = authState.session;
+    if (session == null) return;
+
+    final repository = ref.read(mentorRequestRepositoryProvider);
+    final cached = await repository.loadCachedConversation(
+      studentUid: session.uid,
+      sessionId: widget.sessionId,
+    );
+    final merged = mergeChatTimeline(cached, _optimisticMessages);
+    await repository.saveCachedConversation(
+      studentUid: session.uid,
+      sessionId: widget.sessionId,
+      messages: merged,
     );
   }
 }
@@ -776,7 +993,6 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
 
     final canLaunch = await canLaunchUrl(uri);
     if (!mounted) return;
-
     if (!canLaunch) {
       showAppSnackBar(context, 'Cannot open this link right now.');
       return;
@@ -908,7 +1124,7 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
           ),
         ),
       ),
-      error: (error, stack) => AppScreen(
+      error: (error, stackTrace) => AppScreen(
         body: SafeArea(
           top: false,
           child: AppErrorState(
@@ -1026,8 +1242,8 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
                       ? AppEmptyState(
                           title: 'No notifications left',
                           message: messages.isEmpty
-                              ? 'Your admin has not sent any cohort messages yet.'
-                              : 'Everything here has been cleared. New updates will appear automatically.',
+                              ? 'Your mentor has not sent any cohort messages yet.'
+                              : 'Everything here has been cleared.',
                           icon: Icons.notifications_off_outlined,
                         )
                       : ListView(
@@ -1262,19 +1478,84 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
   }
 }
 
-class _ChannelCard extends StatelessWidget {
-  const _ChannelCard({required this.channel, required this.onTap});
+String? _mentorRouteForDashboard(StudentDashboardSnapshot? dashboard) {
+  final session = _preferredMentorSession(dashboard);
+  if (session == null) return null;
+  final isLive = dashboard?.liveSession?.id == session.id;
+  return isLive
+      ? '/ai-tutor/${session.id}?source=live'
+      : '/ai-tutor/${session.id}';
+}
 
-  final Channel channel;
-  final VoidCallback onTap;
+CohortSessionModel? _preferredMentorSession(
+  StudentDashboardSnapshot? dashboard,
+) {
+  if (dashboard == null) return null;
+  return dashboard.liveSession ??
+      dashboard.latestUnlockedSession ??
+      dashboard.nextSession ??
+      dashboard.latestRecordedSession;
+}
+
+MentorChatMessage? _latestMentorChat(List<MentorChatMessage> messages) {
+  if (messages.isEmpty) return null;
+  final sorted = [...messages]
+    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return sorted.first;
+}
+
+Future<void> _openCommunitySpace(
+  BuildContext context,
+  CommunitySpaceModel space,
+) async {
+  final uri = Uri.tryParse(space.roomUrl ?? '');
+  if (uri == null) {
+    showAppSnackBar(context, 'This space link is not ready yet.');
+    return;
+  }
+
+  final canLaunch = await canLaunchUrl(uri);
+  if (!context.mounted) return;
+  if (!canLaunch) {
+    showAppSnackBar(context, 'Cannot open this community room right now.');
+    return;
+  }
+
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+class _CommunitySpaceTile extends StatelessWidget {
+  const _CommunitySpaceTile({required this.space});
+
+  final CommunitySpaceModel space;
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = _communityAccent(space.category);
     return InkWell(
-      onTap: onTap,
+      onTap: () => context.push('/community/chat/${space.id}'),
       borderRadius: BorderRadius.circular(26),
-      child: AppCard(
-        radius: 26,
+      child: Ink(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF111C2E)
+              : Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(
+            color: accent.withValues(alpha: isDark ? 0.34 : 0.16),
+          ),
+          boxShadow: isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppColors.deepBlue.withValues(alpha: 0.06),
+                    blurRadius: 24,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1282,77 +1563,79 @@ class _ChannelCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: channel.colors),
+                color: accent.withValues(alpha: isDark ? 0.24 : 0.12),
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: const Icon(Icons.tag_rounded, color: Colors.white),
+              alignment: Alignment.center,
+              child: Icon(space.icon, color: accent),
             ),
             const Gap(14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
-                        '#${channel.name}',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w800),
+                        space.title,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                      if (channel.unread > 0) ...[
-                        const Gap(8),
+                      if ((space.category ?? '').trim().isNotEmpty)
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                            horizontal: 10,
+                            vertical: 5,
                           ),
-                          decoration: const BoxDecoration(
-                            color: AppColors.orange,
-                            borderRadius: BorderRadius.all(
-                              Radius.circular(999),
-                            ),
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
-                            '${channel.unread}',
+                            (space.category ?? '').trim(),
                             style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(
-                                  color: Colors.white,
+                                  color: accent,
                                   fontWeight: FontWeight.w800,
                                 ),
                           ),
                         ),
-                      ],
                     ],
                   ),
                   const Gap(8),
                   Text(
-                    channel.description,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.mutedForeground,
+                    space.description,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _contextMutedColor(context),
+                      height: 1.52,
                     ),
                   ),
-                  const Gap(8),
+                  const Gap(10),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.groups_rounded,
-                        size: 16,
-                        color: AppColors.mutedForeground,
+                      Text(
+                        'Open room',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       const Gap(6),
-                      Text(
-                        '${channel.members} members',
-                        style: Theme.of(context).textTheme.bodySmall,
+                      Icon(
+                        Icons.arrow_outward_rounded,
+                        size: 16,
+                        color: accent,
                       ),
                     ],
                   ),
                 ],
               ),
-            ),
-            const Gap(12),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: AppColors.mutedForeground,
             ),
           ],
         ),
@@ -1361,8 +1644,240 @@ class _ChannelCard extends StatelessWidget {
   }
 }
 
+class _ConnectedFeatureCard extends StatelessWidget {
+  const _ConnectedFeatureCard({
+    required this.icon,
+    required this.accent,
+    required this.title,
+    required this.eyebrow,
+    required this.description,
+    required this.onTap,
+    this.badge,
+  });
+
+  final IconData icon;
+  final Color accent;
+  final String title;
+  final String eyebrow;
+  final String description;
+  final VoidCallback onTap;
+  final String? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(26),
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFF111C2E)
+              : Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: accent.withValues(alpha: isDark ? 0.34 : 0.14)),
+          boxShadow: isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: accent.withValues(alpha: 0.08),
+                    blurRadius: 24,
+                    offset: const Offset(0, 12),
+                  ),
+                ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, color: accent, size: 18),
+                ),
+                const Spacer(),
+                if (badge != null)
+                  Flexible(
+                    child: Align(
+                      alignment: Alignment.topRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          badge!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: accent,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const Gap(12),
+            Text(
+              title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const Gap(4),
+            Text(
+              eyebrow,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: accent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const Gap(6),
+            Text(
+              description,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: _contextMutedColor(context),
+                height: 1.52,
+              ),
+            ),
+            const Gap(12),
+            Row(
+              children: [
+                Text(
+                  'Open',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Gap(6),
+                Icon(Icons.arrow_outward_rounded, size: 16, color: accent),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CommunityHeroStat extends StatelessWidget {
+  const _CommunityHeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.darkMutedForeground,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Gap(6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Color _communityAccent(String? category) {
+  final normalized = (category ?? '').trim().toLowerCase();
+  if (normalized.contains('discord')) return const Color(0xFF6366F1);
+  if (normalized.contains('whatsapp')) return const Color(0xFF16A34A);
+  if (normalized.contains('network')) return AppColors.orange;
+  return AppColors.deepBlueLight;
+}
+
+Color _contextMutedColor(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? AppColors.darkMutedForeground
+      : AppColors.mutedForeground;
+}
+
+class _MentorHeaderPill extends StatelessWidget {
+  const _MentorHeaderPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: Colors.white.withValues(alpha: 0.82)),
+          const Gap(8),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: Colors.white.withValues(alpha: 0.86),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MentorIntroBubble extends StatelessWidget {
-  const _MentorIntroBubble();
+  const _MentorIntroBubble({required this.isDark});
+
+  final bool isDark;
 
   @override
   Widget build(BuildContext context) {
@@ -1370,15 +1885,22 @@ class _MentorIntroBubble extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFFDF2C7),
+          color: isDark
+              ? AppColors.darkSurface
+              : AppColors.deepBlue.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? AppColors.darkBorder
+                : AppColors.deepBlue.withValues(alpha: 0.08),
+          ),
         ),
         child: Text(
-          'Mentor replies appear here as soon as your tutor responds from the admin inbox.',
+          'Mentor replies appear here as you start the conversation. Tap the message box below to send your first message.',
           textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: AppColors.deepBlueDark),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: isDark ? AppColors.darkForeground : AppColors.deepBlue,
+          ),
         ),
       ),
     );
@@ -1408,7 +1930,7 @@ class _MentorEmptyConversation extends StatelessWidget {
           ),
           const Gap(6),
           Text(
-            'Send your first message and it will appear here like a real chat thread.',
+            'Send your first message',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,
@@ -1427,12 +1949,18 @@ class _MentorDayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.86),
+          color: isDark ? AppColors.darkSurface : AppColors.surface,
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isDark
+                ? AppColors.darkBorder
+                : AppColors.deepBlue.withValues(alpha: 0.08),
+          ),
         ),
         child: Text(
           _formatMentorDay(date),
@@ -1453,7 +1981,10 @@ class _MentorChatBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isMine = message.isMine;
-    final bubbleColor = isMine ? const Color(0xFFD9FDD3) : Colors.white;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bubbleColor = isMine
+        ? (isDark ? AppColors.deepBlueLight : AppColors.deepBlue)
+        : (isDark ? AppColors.darkSurface : AppColors.surface);
     final radius = isMine
         ? const BorderRadius.only(
             topLeft: Radius.circular(22),
@@ -1483,7 +2014,7 @@ class _MentorChatBubble extends StatelessWidget {
               borderRadius: radius,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1496,7 +2027,7 @@ class _MentorChatBubble extends StatelessWidget {
                   Text(
                     message.senderName,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.tealDark,
+                      color: isDark ? AppColors.tealLight : AppColors.tealDark,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1505,7 +2036,11 @@ class _MentorChatBubble extends StatelessWidget {
                 Text(
                   message.body,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.foreground,
+                    color: isMine
+                        ? Colors.white
+                        : isDark
+                        ? AppColors.darkForeground
+                        : AppColors.foreground,
                     height: 1.5,
                   ),
                 ),
@@ -1513,23 +2048,48 @@ class _MentorChatBubble extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (message.isSending) ...[
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 1.8,
+                          color: isMine
+                              ? Colors.white.withValues(alpha: 0.92)
+                              : AppColors.teal,
+                        ),
+                      ),
+                      const Gap(6),
+                    ],
                     Text(
-                      _formatMentorMessageTime(message.createdAt),
+                      message.isSending
+                          ? 'Sending...'
+                          : _formatMentorMessageTime(message.createdAt),
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: AppColors.mutedForeground,
+                        color: isMine
+                            ? Colors.white.withValues(alpha: 0.78)
+                            : AppColors.mutedForeground,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     if (isMine) ...[
                       const Gap(6),
                       Icon(
-                        message.isResolved
+                        message.isSending
+                            ? Icons.schedule_rounded
+                            : message.isResolved
                             ? Icons.done_all_rounded
                             : message.isRead
                             ? Icons.done_all_rounded
                             : Icons.done_rounded,
                         size: 16,
-                        color: message.isResolved || message.isRead
+                        color: isMine
+                            ? Colors.white.withValues(
+                                alpha: message.isResolved || message.isRead
+                                    ? 0.92
+                                    : 0.72,
+                              )
+                            : message.isResolved || message.isRead
                             ? AppColors.tealDark
                             : AppColors.mutedForeground,
                       ),
@@ -1543,6 +2103,48 @@ class _MentorChatBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+List<Widget> _buildConversationTiles(List<MentorChatMessage> messages) {
+  if (messages.isEmpty) return const <Widget>[];
+
+  final slivers = <Widget>[];
+  DateTime? lastDay;
+
+  for (final message in messages) {
+    final day = DateTime(
+      message.createdAt.year,
+      message.createdAt.month,
+      message.createdAt.day,
+    );
+    if (lastDay == null || day != lastDay) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: _MentorDayChip(date: day),
+          ),
+        ),
+      );
+      lastDay = day;
+    }
+
+    slivers.add(
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            message.isMine ? 78 : 16,
+            0,
+            message.isMine ? 16 : 78,
+            10,
+          ),
+          child: _MentorChatBubble(message: message),
+        ),
+      ),
+    );
+  }
+
+  return slivers;
 }
 
 String _formatMentorMessageTime(DateTime timestamp) {

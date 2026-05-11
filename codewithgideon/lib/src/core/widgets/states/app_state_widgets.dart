@@ -19,6 +19,9 @@ class AppLoadingState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final mutedColor = isDark
+        ? AppColors.darkMutedForeground
+        : AppColors.mutedForeground;
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -36,7 +39,7 @@ class AppLoadingState extends StatelessWidget {
           message,
           style: Theme.of(
             context,
-          ).textTheme.bodyMedium?.copyWith(color: AppColors.mutedForeground),
+          ).textTheme.bodyMedium?.copyWith(color: mutedColor),
           textAlign: TextAlign.center,
         ),
       ],
@@ -223,12 +226,15 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mutedColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.darkMutedForeground
+        : AppColors.mutedForeground;
     return AppCard(
       child: Semantics(
         label: title,
         child: Column(
           children: [
-            Icon(icon, size: 44, color: AppColors.mutedForeground),
+            Icon(icon, size: 44, color: mutedColor),
             const Gap(12),
             Text(
               title,
@@ -241,7 +247,7 @@ class AppEmptyState extends StatelessWidget {
             Text(
               message,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppColors.mutedForeground,
+                color: mutedColor,
                 height: 1.6,
               ),
               textAlign: TextAlign.center,
@@ -270,6 +276,9 @@ class AppErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mutedColor = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.darkMutedForeground
+        : AppColors.mutedForeground;
     final child = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -297,7 +306,7 @@ class AppErrorState extends StatelessWidget {
         Text(
           message,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: AppColors.mutedForeground,
+            color: mutedColor,
             height: 1.6,
           ),
           textAlign: TextAlign.center,

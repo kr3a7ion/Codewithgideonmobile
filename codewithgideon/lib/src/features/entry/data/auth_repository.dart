@@ -4,6 +4,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum EnrollmentStatus { enrolled, pending, notRegistered }
 
+class PendingGoogleLinkException implements Exception {
+  const PendingGoogleLinkException({required this.email});
+
+  final String email;
+}
+
+class _PendingGoogleLink {
+  const _PendingGoogleLink({required this.email, required this.credential});
+
+  final String email;
+  final AuthCredential credential;
+}
+
 class AuthSession {
   const AuthSession({
     required this.uid,
@@ -71,6 +84,7 @@ class AuthRepository {
   final SharedPreferences _preferences;
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firebaseFirestore;
+  _PendingGoogleLink? _pendingGoogleLink;
 
   static const _onboardingSeenKey = 'auth.onboarding_seen';
 
@@ -90,6 +104,7 @@ class AuthRepository {
       email: normalizedEmail,
       password: normalizedPassword,
     );
+    await _linkPendingGoogleIfNeeded(credential.user);
     await markOnboardingSeen();
     return _buildSession(credential.user!);
   }
@@ -116,6 +131,38 @@ class AuthRepository {
       enrollmentStatus: EnrollmentStatus.notRegistered,
       isEmailVerified: credential.user?.emailVerified ?? false,
     );
+  }
+
+  Future<AuthSession> signInWithGoogle() async {
+    final provider = GoogleAuthProvider()
+      ..addScope('email')
+      ..setCustomParameters({'prompt': 'select_account'});
+
+    try {
+      final credential = await _firebaseAuth.signInWithProvider(provider);
+      final user = credential.user;
+      if (user == null) {
+        throw StateError('Google sign-in did not return a user account.');
+      }
+
+      await markOnboardingSeen();
+      return _buildSession(user);
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'account-exists-with-different-credential') {
+        final email = error.email?.trim();
+        final credential = error.credential;
+
+        if (email != null && email.isNotEmpty && credential != null) {
+          _pendingGoogleLink = _PendingGoogleLink(
+            email: email,
+            credential: credential,
+          );
+          throw PendingGoogleLinkException(email: email);
+        }
+      }
+
+      rethrow;
+    }
   }
 
   Future<void> sendEmailVerification() async {
@@ -172,5 +219,28 @@ class AuthRepository {
       enrollmentStatus: enrollmentStatus,
       isEmailVerified: refreshedUser.emailVerified,
     );
+  }
+
+  Future<void> _linkPendingGoogleIfNeeded(User? user) async {
+    final pending = _pendingGoogleLink;
+    if (pending == null || user == null) return;
+
+    final userEmail = user.email?.trim().toLowerCase();
+    if (userEmail == null || userEmail != pending.email.toLowerCase()) return;
+
+    try {
+      await user.linkWithCredential(pending.credential);
+    } on FirebaseAuthException catch (error) {
+      // These cases mean the provider is already connected or the original
+      // credential can no longer be reused safely. Either way, password login
+      // should still succeed, so we clear the pending link and move on.
+      if (error.code != 'provider-already-linked' &&
+          error.code != 'credential-already-in-use' &&
+          error.code != 'invalid-credential') {
+        rethrow;
+      }
+    } finally {
+      _pendingGoogleLink = null;
+    }
   }
 }

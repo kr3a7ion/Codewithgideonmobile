@@ -4,13 +4,12 @@ import 'package:go_router/go_router.dart';
 
 import '../core/state/app_providers.dart';
 import '../core/widgets/app_scaffold.dart';
-import '../features/assessments/assessment_screens.dart';
+// ...existing code...
 import '../features/classes/class_screens.dart';
 import '../features/community/community_screens.dart';
 import '../features/community/models/mentor_request_model.dart';
 import '../features/entry/entry_screens.dart';
 import '../features/home/dashboard_screen.dart';
-import '../features/live/live_session_screen.dart';
 import '../features/payment/models/payment_checkout_model.dart';
 import '../features/payment/payment_screen.dart';
 import '../features/profile/profile_screens.dart';
@@ -47,6 +46,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/classes',
         '/community',
         '/profile',
+        '/mentor',
         '/live',
         '/recorded',
         '/resources',
@@ -74,6 +74,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/continue-registration',
       ].contains(location);
       final isVerificationRoute = location == '/verify-email';
+      final isLegalRoute = location == '/privacy';
 
       if (isBooting) {
         return location == '/' ? null : '/';
@@ -114,6 +115,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (authState.enrollmentStatus == EnrollmentStatus.notRegistered &&
           location != '/continue-registration' &&
+          !isLegalRoute &&
           !isPaymentRoute) {
         return '/continue-registration';
       }
@@ -241,11 +243,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ClassDetailsScreen(classId: state.pathParameters['id']!),
       ),
       GoRoute(
-        path: '/live/:id',
-        builder: (context, state) =>
-            LiveSessionScreen(sessionId: state.pathParameters['id']!),
-      ),
-      GoRoute(
         path: '/recorded/:id',
         builder: (context, state) =>
             RecordedPlayerScreen(lessonId: state.pathParameters['id']!),
@@ -253,6 +250,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/resources',
         builder: (context, state) => const ResourcesLibraryScreen(),
+      ),
+      GoRoute(
+        path: '/mentor',
+        builder: (context, state) => const AskMentorScreen(
+          sessionId: null,
+          contextType: MentorRequestContext.recorded,
+        ),
+      ),
+      GoRoute(
+        path: '/mentor/:sessionId',
+        builder: (context, state) => AskMentorScreen(
+          sessionId: state.pathParameters['sessionId']!,
+          contextType: MentorRequestContext.recorded,
+        ),
       ),
       GoRoute(
         path: '/ai-tutor/:lessonId',
@@ -266,29 +277,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           );
         },
       ),
-      GoRoute(
-        path: '/quiz/:id/intro',
-        builder: (context, state) =>
-            QuizIntroScreen(quizId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/quiz/:id/question/:questionId',
-        builder: (context, state) => QuizQuestionScreen(
-          quizId: state.pathParameters['id']!,
-          questionId: state.pathParameters['questionId']!,
-        ),
-      ),
-      GoRoute(
-        path: '/quiz/:id/results',
-        builder: (context, state) =>
-            QuizResultsScreen(quizId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/assignment/:id',
-        builder: (context, state) => AssignmentSubmissionScreen(
-          assignmentId: state.pathParameters['id']!,
-        ),
-      ),
+      // ...existing code...
       GoRoute(
         path: '/community/chat/:channelId',
         builder: (context, state) =>
@@ -309,6 +298,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/privacy',
+        builder: (context, state) => const PrivacyPolicyScreen(),
       ),
     ],
   );

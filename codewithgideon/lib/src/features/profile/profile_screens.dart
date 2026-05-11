@@ -3,14 +3,40 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/data/demo_data.dart';
 import '../../core/state/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../home/models/student_dashboard_snapshot.dart';
+
+const _settingsContactLinks = <({
+  IconData icon,
+  String title,
+  String subtitle,
+  String url,
+})>[
+  (
+    icon: Icons.camera_alt_outlined,
+    title: 'Instagram',
+    subtitle: '@c0dewithgideon',
+    url: 'https://www.instagram.com/c0dewithgideon',
+  ),
+  (
+    icon: Icons.music_note_rounded,
+    title: 'TikTok',
+    subtitle: '@codewithgideon',
+    url: 'https://www.tiktok.com/@codewithgideon',
+  ),
+  (
+    icon: Icons.chat_bubble_outline_rounded,
+    title: 'WhatsApp',
+    subtitle: 'Direct chat with the team',
+    url: 'https://api.whatsapp.com/message/NMQR2ZKNJTZBL1?autoload=1&app_absent=0',
+  ),
+];
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -64,16 +90,6 @@ class ProfileScreen extends ConsumerWidget {
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(22, 30, 22, 130),
                   children: [
-                    PremiumPageHeader(
-                      title: 'Profile',
-                      subtitle:
-                          'Your learning identity, cohort access, and account details in one premium view.',
-                      trailing: PremiumIconButton(
-                        icon: Icons.settings_rounded,
-                        onTap: () => context.push('/settings'),
-                      ),
-                    ),
-                    const Gap(14),
                     AppCard(
                       padding: EdgeInsets.zero,
                       radius: 34,
@@ -174,10 +190,11 @@ class ProfileScreen extends ConsumerWidget {
                                   ),
                                 ),
                                 const Gap(12),
+
                                 PremiumIconButton(
-                                  icon: Icons.edit_outlined,
+                                  icon: Icons.settings_rounded,
                                   isDark: true,
-                                  onTap: () => context.push('/profile/edit'),
+                                  onTap: () => context.push('/settings'),
                                 ),
                               ],
                             ),
@@ -215,26 +232,16 @@ class ProfileScreen extends ConsumerWidget {
                     ),
                     const Gap(16),
                     AppCard(
-                      radius: 30,
+                      radius: 28,
                       color: Theme.of(
                         context,
-                      ).cardColor.withValues(alpha: 0.84),
+                      ).cardColor.withValues(alpha: 0.82),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Account Snapshot',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const Gap(8),
-                          Text(
-                            'A polished view of the details your mentors and admin team use to support your journey.',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: _muted(context),
-                                  height: 1.55,
-                                ),
+                          _ProfileDetailRow(
+                            label: 'Member since',
+                            value: joinedLabel,
+                            icon: Icons.calendar_today_outlined,
                           ),
                           const Gap(18),
                           _ProfileDetailRow(
@@ -242,106 +249,11 @@ class ProfileScreen extends ConsumerWidget {
                             value: profile.phone,
                             icon: Icons.call_outlined,
                           ),
-                          const Gap(14),
-                          _ProfileDetailRow(
-                            label: 'Joined',
-                            value: joinedLabel,
-                            icon: Icons.event_available_rounded,
-                          ),
-                          const Gap(14),
-                          _ProfileDetailRow(
-                            label: 'Cohort',
-                            value: dashboard.activeCohort.label,
-                            icon: Icons.groups_rounded,
-                          ),
-                          const Gap(14),
-                          _ProfileDetailRow(
-                            label: 'Email status',
-                            value: authState.isEmailVerified
-                                ? 'Verified and secured'
-                                : 'Verification pending',
-                            icon: authState.isEmailVerified
-                                ? Icons.verified_user_rounded
-                                : Icons.mark_email_unread_outlined,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Gap(16),
-                    AppCard(
-                      radius: 30,
-                      color: Theme.of(
-                        context,
-                      ).cardColor.withValues(alpha: 0.84),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  'Learning Access',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                              ),
-                              Text(
-                                '$progressPercent%',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: AppColors.tealDark,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          const Gap(8),
-                          Text(
-                            dashboard.hasAnyPending
-                                ? 'Your profile is saved. Finish approval or payment to unlock your full cohort experience.'
-                                : 'Your access is live, your cohort is mapped, and your premium learning path is ready to use.',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  color: _muted(context),
-                                  height: 1.55,
-                                ),
-                          ),
                           const Gap(18),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(999),
-                            child: LinearProgressIndicator(
-                              value: dashboard.progressPercent.clamp(0, 1),
-                              minHeight: 10,
-                              backgroundColor: AppColors.muted,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                AppColors.teal,
-                              ),
-                            ),
-                          ),
-                          const Gap(16),
-                          AdaptiveWrap(
-                            minItemWidth: 150,
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: [
-                              _InfoTile(
-                                label: 'Path',
-                                value: dashboard.path.title,
-                                icon: Icons.route_rounded,
-                              ),
-                              _InfoTile(
-                                label: 'Remaining Weeks',
-                                value: '${dashboard.remainingWeeks}',
-                                icon: Icons.timelapse_rounded,
-                              ),
-                              _InfoTile(
-                                label: 'Billing',
-                                value: dashboard.hasAnyPending
-                                    ? 'Pending'
-                                    : 'In good standing',
-                                icon: Icons.workspace_premium_outlined,
-                              ),
-                            ],
+                          _ProfileDetailRow(
+                            label: 'Current cohort',
+                            value: dashboard.activeCohort.label,
+                            icon: Icons.groups_2_outlined,
                           ),
                         ],
                       ),
@@ -354,21 +266,7 @@ class ProfileScreen extends ConsumerWidget {
                       ).cardColor.withValues(alpha: 0.82),
                       child: Column(
                         children: [
-                          _ProfileAction(
-                            icon: Icons.edit_outlined,
-                            title: 'Edit profile',
-                            subtitle: 'Update your name and phone number',
-                            onTap: () => context.push('/profile/edit'),
-                          ),
-                          const Divider(height: 22),
-                          _ProfileAction(
-                            icon: Icons.forum_outlined,
-                            title: 'Community inbox',
-                            subtitle:
-                                'Review mentor replies and cohort announcements',
-                            onTap: () => context.push('/community/messages'),
-                          ),
-                          const Divider(height: 22),
+                          
                           _ProfileAction(
                             icon: Icons.workspace_premium_outlined,
                             title: 'Certificates',
@@ -397,62 +295,143 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
-class CertificatesScreen extends StatelessWidget {
+class CertificatesScreen extends ConsumerWidget {
   const CertificatesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return AppScreen(
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
-          children: [
-            PremiumPageHeader(
-              title: 'Achievements',
-              subtitle: 'Your milestones, certificates, and earned progress.',
-              leading: PremiumIconButton(
-                icon: Icons.arrow_back_rounded,
-                onTap: () => context.pop(),
-              ),
-            ),
-            const Gap(16),
-            for (final item in DemoData.certificates) ...[
-              AppCard(
-                radius: 28,
-                color: Theme.of(context).cardColor.withValues(alpha: 0.82),
-                child: Column(
-                  children: [
-                    Text(
-                      item.title,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Gap(8),
-                    Text(
-                      'Instructor: ${item.instructor}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: _muted(context)),
-                    ),
-                    const Gap(4),
-                    Text(
-                      'Issued ${item.issueDate}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: _muted(context)),
-                    ),
-                  ],
-                ),
-              ),
-              const Gap(12),
-            ],
-          ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dashboardState = ref.watch(dashboardSnapshotProvider);
+
+    return dashboardState.when(
+      loading: () => const AppScreen(
+        body: SafeArea(
+          top: false,
+          child: AppLoadingState(
+            compact: true,
+            title: 'Loading achievements...',
+            message: 'Building your cohort milestone timeline.',
+          ),
         ),
       ),
+      error: (error, _) => AppScreen(
+        body: SafeArea(
+          top: false,
+          child: AppErrorState(
+            compact: true,
+            title: 'Achievements unavailable',
+            message: 'We could not load your cohort progress right now.',
+            onRetry: () => ref.refresh(dashboardSnapshotProvider),
+          ),
+        ),
+      ),
+      data: (dashboard) {
+        final achievements = _buildCohortAchievements(dashboard);
+
+        return AppScreen(
+          body: SafeArea(
+            top: false,
+            bottom: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
+              children: [
+                PremiumPageHeader(
+                  title: 'Achievements',
+                  subtitle:
+                      'Milestones are now generated from your real cohort access, sessions, and progress.',
+                  leading: PremiumIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => context.pop(),
+                  ),
+                ),
+                const Gap(16),
+                for (final item in achievements) ...[
+                  AppCard(
+                    radius: 28,
+                    color: Theme.of(context).cardColor.withValues(alpha: 0.82),
+                    border: Border.all(
+                      color: item.unlocked
+                          ? item.accent.withValues(alpha: 0.18)
+                          : AppColors.deepBlue.withValues(alpha: 0.06),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: item.accent.withValues(
+                              alpha: item.unlocked ? 0.14 : 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(item.icon, color: item.accent),
+                        ),
+                        const Gap(14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: item.accent.withValues(
+                                        alpha: item.unlocked ? 0.14 : 0.08,
+                                      ),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      item.unlocked ? 'Unlocked' : 'In view',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: item.accent,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Gap(8),
+                              Text(
+                                item.description,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: _muted(context),
+                                      height: 1.55,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Gap(12),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -587,18 +566,26 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  Future<void> _openContactLink(BuildContext context, String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null) {
+      showAppSnackBar(context, 'This contact link is not ready yet.');
+      return;
+    }
+
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!launched && context.mounted) {
+      showAppSnackBar(context, 'We could not open that contact link right now.');
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final controller = ref.read(settingsProvider.notifier);
-    final authState = ref.watch(authControllerProvider);
-    final dashboard = _dashboardSnapshotOrNull(
-      ref.watch(dashboardSnapshotProvider),
-    );
-    final email = dashboard?.profile.email ?? authState.session?.email ?? '';
-    final currentPath = dashboard?.path.title ?? 'Continue registration';
-    final cohortLabel =
-        dashboard?.activeCohort.label ?? 'No cohort assigned yet';
 
     return AppScreen(
       body: Stack(
@@ -612,8 +599,7 @@ class SettingsScreen extends ConsumerWidget {
               children: [
                 PremiumPageHeader(
                   title: 'Settings',
-                  subtitle:
-                      'Shape your learning environment, notifications, and account comfort from one polished space.',
+                  subtitle: '',
                   leading: PremiumIconButton(
                     icon: Icons.arrow_back_rounded,
                     onTap: () => context.pop(),
@@ -621,69 +607,20 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const Gap(18),
                 AppCard(
-                  radius: 32,
-                  color: Theme.of(context).cardColor.withValues(alpha: 0.84),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const BrandHeroLockup(
-                        markSize: 84,
-                        wordmarkHeight: 24,
-                        wordmarkColor: AppColors.foreground,
-                        center: false,
-                      ),
-                      const Gap(18),
-                      Text(
-                        'Everything here is tuned to keep your classes, updates, and payments feeling calm and predictable.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _muted(context),
-                          height: 1.6,
-                        ),
-                      ),
-                      const Gap(18),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          _SettingsBadge(
-                            icon: Icons.notifications_active_outlined,
-                            label: settings.notifications
-                                ? 'Alerts on'
-                                : 'Alerts paused',
-                          ),
-                          _SettingsBadge(
-                            icon: settings.darkMode
-                                ? Icons.dark_mode_rounded
-                                : Icons.light_mode_rounded,
-                            label: settings.darkMode
-                                ? 'Dark appearance'
-                                : 'Light appearance',
-                          ),
-                          const _SettingsBadge(
-                            icon: Icons.wallet_rounded,
-                            label: 'Pay as you go',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const Gap(16),
-                AppCard(
                   radius: 30,
                   color: Theme.of(context).cardColor.withValues(alpha: 0.84),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Experience',
+                        'Preferences',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const Gap(8),
                       Text(
-                        'Manage how the app feels day to day.',
+                        'Keep the app quiet, bright, or distraction-free based on how you learn best.',
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: _muted(context)),
@@ -692,8 +629,9 @@ class SettingsScreen extends ConsumerWidget {
                       _SettingsToggleTile(
                         icon: Icons.notifications_none_rounded,
                         title: 'Notifications',
-                        subtitle:
-                            'Receive live class updates, approvals, and admin replies.',
+                        subtitle: settings.notifications
+                            ? 'Live class updates and mentor replies are enabled.'
+                            : 'Class and mentor alerts are currently paused.',
                         accent: AppColors.teal,
                         trailing: Switch.adaptive(
                           value: settings.notifications,
@@ -716,63 +654,55 @@ class SettingsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const Gap(16),
+                const Gap(18),
                 AppCard(
-                  radius: 30,
-                  color: Theme.of(context).cardColor.withValues(alpha: 0.84),
+                  radius: 28,
+                  color: Theme.of(context).cardColor.withValues(alpha: 0.82),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Account Snapshot',
+                        'Stay Connected',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                       ),
+                      const Gap(8),
+                      Text(
+                        'Reach CodeWithGideon through the same social channels listed on the web experience.',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: _muted(context)),
+                      ),
                       const Gap(18),
-                      _SettingsInfoRow(
-                        label: 'Account email',
-                        value: email.isEmpty ? 'Not available yet' : email,
-                      ),
-                      const Gap(14),
-                      _SettingsInfoRow(
-                        label: 'Current path',
-                        value: currentPath,
-                      ),
-                      const Gap(14),
-                      _SettingsInfoRow(label: 'Cohort', value: cohortLabel),
-                      const Gap(14),
-                      const _SettingsInfoRow(
-                        label: 'Billing model',
-                        value: 'Pay as you go or pay the full path upfront',
-                      ),
+                      for (var index = 0;
+                          index < _settingsContactLinks.length;
+                          index++) ...[
+                        _ProfileAction(
+                          icon: _settingsContactLinks[index].icon,
+                          title: _settingsContactLinks[index].title,
+                          subtitle: _settingsContactLinks[index].subtitle,
+                          onTap: () => _openContactLink(
+                            context,
+                            _settingsContactLinks[index].url,
+                          ),
+                        ),
+                        if (index != _settingsContactLinks.length - 1)
+                          const Divider(height: 18),
+                      ],
                     ],
                   ),
                 ),
-                const Gap(16),
+                const Gap(18),
                 AppCard(
-                  radius: 30,
-                  color: Theme.of(context).cardColor.withValues(alpha: 0.84),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'About The App',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const Gap(10),
-                      Text(
-                        'CodeWithGideon is built for guided live learning with flexible payment options and steady mentor support.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _muted(context),
-                          height: 1.6,
-                        ),
-                      ),
-                      const Gap(16),
-                      const _SettingsInfoRow(label: 'Version', value: '1.0.0'),
-                    ],
+                  radius: 28,
+                  color: Theme.of(context).cardColor.withValues(alpha: 0.82),
+                  child: _ProfileAction(
+                    icon: Icons.privacy_tip_outlined,
+                    title: 'Privacy Policy',
+                    subtitle:
+                        'See how CodeWithGideon collects, protects, and uses your information.',
+                    onTap: () => context.push('/privacy'),
                   ),
                 ),
                 const Gap(22),
@@ -791,53 +721,6 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoTile extends StatelessWidget {
-  const _InfoTile({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark
-            ? AppColors.darkMuted.withValues(alpha: 0.82)
-            : AppColors.muted.withValues(alpha: 0.76),
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: AppColors.tealDark),
-          const Gap(10),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: _muted(context),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const Gap(6),
-          Text(
-            value,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1096,83 +979,97 @@ class _SettingsToggleTile extends StatelessWidget {
   }
 }
 
-class _SettingsBadge extends StatelessWidget {
-  const _SettingsBadge({required this.icon, required this.label});
+Color _muted(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? AppColors.darkMutedForeground
+      : AppColors.mutedForeground;
+}
 
-  final IconData icon;
-  final String label;
+class PrivacyPolicyScreen extends StatelessWidget {
+  const PrivacyPolicyScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.white.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: AppColors.deepBlue.withValues(alpha: isDark ? 0.18 : 0.08),
-        ),
+    final sections = const [
+      (
+        'Introduction',
+        'CodeWithGideon is committed to protecting your personal information and using it responsibly. This policy explains what information we collect, how we use it, and your rights.',
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      (
+        'Information We Collect',
+        'We may collect your name and email during registration, payment-related information processed securely by third-party providers, and app usage data that helps us improve the learning experience.',
+      ),
+      (
+        'How We Use Your Information',
+        'We use your information to create and manage your account, process weekly billing and enrollment, communicate important updates, and improve our app and services.',
+      ),
+      (
+        'Data Protection',
+        'We do not sell your personal data. Payments are handled by trusted third-party processors, and we take reasonable steps to secure the information entrusted to us.',
+      ),
+    ];
+
+    return AppScreen(
+      body: Stack(
         children: [
-          Icon(icon, size: 16, color: AppColors.tealDark),
-          const Gap(8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
+          const AppAtmosphereBackdrop(),
+          SafeArea(
+            top: false,
+            bottom: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
+              children: [
+                PremiumPageHeader(
+                  title: 'Privacy Policy',
+                  subtitle: 'Your privacy matters to us.',
+                  leading: PremiumIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: () => context.pop(),
+                  ),
+                ),
+                const Gap(18),
+                AppCard(
+                  radius: 32,
+                  color: Theme.of(context).cardColor.withValues(alpha: 0.84),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final section in sections) ...[
+                        Text(
+                          section.$1,
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const Gap(10),
+                        Text(
+                          section.$2,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: _muted(context),
+                                height: 1.6,
+                              ),
+                        ),
+                        if (section != sections.last) const Gap(22),
+                      ],
+                      const Gap(22),
+                      Text(
+                        'This policy may be updated occasionally. Continued use of our services means you accept the updated policy. Last updated: February 2024.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: _muted(context),
+                          fontStyle: FontStyle.italic,
+                          height: 1.55,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
-}
-
-class _SettingsInfoRow extends StatelessWidget {
-  const _SettingsInfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 96,
-          child: Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: _muted(context)),
-          ),
-        ),
-        const Gap(14),
-        Expanded(
-          child: Text(
-            value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              height: 1.45,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-Color _muted(BuildContext context) {
-  return Theme.of(context).brightness == Brightness.dark
-      ? AppColors.darkMutedForeground
-      : AppColors.mutedForeground;
 }
 
 String _initialsFromName(String value) {
@@ -1187,4 +1084,97 @@ StudentDashboardSnapshot? _dashboardSnapshotOrNull(
   AsyncValue<StudentDashboardSnapshot> value,
 ) {
   return value.maybeWhen(data: (snapshot) => snapshot, orElse: () => null);
+}
+
+class _CohortAchievement {
+  const _CohortAchievement({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.accent,
+    required this.unlocked,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color accent;
+  final bool unlocked;
+}
+
+List<_CohortAchievement> _buildCohortAchievements(
+  StudentDashboardSnapshot dashboard,
+) {
+  final unlockedWeeks = dashboard.unlockedSessions.length;
+  final totalWeeks = dashboard.totalProgramWeeks;
+  final halfwayWeek = totalWeeks == 0 ? 0 : (totalWeeks / 2).ceil();
+  final hasRecordings = dashboard.recordedSessions.isNotEmpty;
+  final currentWeek = unlockedWeeks.clamp(1, totalWeeks == 0 ? 1 : totalWeeks);
+  final currentModule = _syllabusTitleForWeek(dashboard, currentWeek);
+  final midpointModule = _syllabusTitleForWeek(dashboard, halfwayWeek);
+  final finalWeek = totalWeeks == 0 ? 1 : totalWeeks;
+  final finalModule = _syllabusTitleForWeek(dashboard, finalWeek);
+
+  return [
+    _CohortAchievement(
+      title: 'Path Chosen',
+      description:
+          'You are enrolled in ${dashboard.path.title} with ${dashboard.course.title} as your active learning track.',
+      icon: Icons.route_outlined,
+      accent: AppColors.deepBlue,
+      unlocked: dashboard.path.title.trim().isNotEmpty,
+    ),
+    _CohortAchievement(
+      title: 'Foundation Module',
+      description: unlockedWeeks > 0
+          ? 'You have started the path with ${_syllabusTitleForWeek(dashboard, 1)} and your first live cohort week is unlocked.'
+          : 'Your first module, ${_syllabusTitleForWeek(dashboard, 1)}, unlocks when your opening week is published.',
+      icon: Icons.lock_open_outlined,
+      accent: AppColors.teal,
+      unlocked: unlockedWeeks > 0,
+    ),
+    _CohortAchievement(
+      title: 'Current Path Stage',
+      description: unlockedWeeks > 0
+          ? 'You currently have $unlockedWeeks of $totalWeeks weeks unlocked and are working through $currentModule.'
+          : 'Your active path stage will appear here once your first cohort week is available.',
+      icon: Icons.flag_outlined,
+      accent: AppColors.orange,
+      unlocked: unlockedWeeks > 0,
+    ),
+    _CohortAchievement(
+      title: 'Midpoint Milestone',
+      description: halfwayWeek > 0 && unlockedWeeks >= halfwayWeek
+          ? 'You have reached the midpoint of ${dashboard.path.title}, landing in $midpointModule.'
+          : 'The midpoint milestone unlocks around week $halfwayWeek when you reach $midpointModule.',
+      icon: Icons.trending_up_rounded,
+      accent: AppColors.tealDark,
+      unlocked: halfwayWeek > 0 && unlockedWeeks >= halfwayWeek,
+    ),
+    _CohortAchievement(
+      title: 'Recorded Revision Trail',
+      description: hasRecordings
+          ? '${dashboard.recordedSessions.length} replay${dashboard.recordedSessions.length == 1 ? '' : 's'} are published for revision along your path.'
+          : 'Recorded lessons will appear here when your cohort team publishes revision material.',
+      icon: Icons.video_library_outlined,
+      accent: AppColors.purple,
+      unlocked: hasRecordings,
+    ),
+    _CohortAchievement(
+      title: 'Final Stretch',
+      description: dashboard.paidWeeks >= totalWeeks && totalWeeks > 0
+          ? 'You have full paid access through the final stage of the path, ending in $finalModule.'
+          : 'You currently have ${dashboard.paidWeeks} of $totalWeeks weeks funded before reaching the final stage, $finalModule.',
+      icon: Icons.workspace_premium_outlined,
+      accent: AppColors.deepBlueLight,
+      unlocked: dashboard.paidWeeks >= totalWeeks && totalWeeks > 0,
+    ),
+  ];
+}
+
+String _syllabusTitleForWeek(StudentDashboardSnapshot dashboard, int week) {
+  for (final item in dashboard.course.syllabus) {
+    if (item.week == week) return item.title;
+  }
+  return 'Week $week';
 }

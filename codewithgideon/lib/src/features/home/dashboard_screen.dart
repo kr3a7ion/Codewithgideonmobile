@@ -99,6 +99,10 @@ class _DashboardContent extends ConsumerWidget {
                     ),
                     const Gap(14),
                     _SummaryGrid(snapshot: snapshot),
+                    if (_shouldShowInitialPaymentPrompt(snapshot)) ...[
+                      const Gap(16),
+                      _InitialPaymentActionButton(snapshot: snapshot),
+                    ],
                     if (snapshot.canTopUp) ...[
                       const Gap(16),
                       _TopUpActionButton(snapshot: snapshot),
@@ -169,6 +173,12 @@ class _DashboardContent extends ConsumerWidget {
     final status = resolveSessionStatus(heroSession);
     return status.actionState == SessionActionState.startsSoon;
   }
+}
+
+bool _shouldShowInitialPaymentPrompt(StudentDashboardSnapshot snapshot) {
+  return snapshot.hasAnyPending &&
+      snapshot.profile.pendingPayment == null &&
+      snapshot.profile.weeksToCommit > 0;
 }
 
 class _DashboardHeader extends ConsumerWidget {
@@ -254,7 +264,7 @@ class _DashboardHeader extends ConsumerWidget {
             data: (count) => count,
             orElse: () => 0,
           ),
-          // Messages is the closest real notification destination available now.
+          // Keep the bell tied to the dedicated notifications inbox.
           onTap: () => context.push('/community/messages'),
         ),
       ],
@@ -729,7 +739,7 @@ class _CourseRoadmap extends StatelessWidget {
             ),
           const Gap(10),
           Text(
-            'This roadmap mirrors the path syllabus saved on the course from the web app, so each learner sees the right weekly outline.',
+            'This roadmap mirrors your path syllabus, highlighting your progress and upcoming milestones.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: secondaryColor,
               height: 1.5,
@@ -833,6 +843,73 @@ class _PendingPaymentStrip extends StatelessWidget {
             child: const Text('Continue'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _InitialPaymentActionButton extends StatelessWidget {
+  const _InitialPaymentActionButton({required this.snapshot});
+
+  final StudentDashboardSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F7C83), Color(0xFF17A0A7)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.teal.withValues(alpha: 0.18),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () =>
+              context.push('/payment?mode=initial&returnTo=%2Fdashboard'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Complete Your Payment',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      const Gap(6),
+                      Text(
+                        'Your registration is saved. Pay now to unlock ${snapshot.profile.weeksToCommit} week(s) and activate classes.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          height: 1.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(14),
+                const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

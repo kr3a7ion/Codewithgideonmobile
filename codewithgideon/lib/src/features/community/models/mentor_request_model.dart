@@ -71,6 +71,7 @@ class MentorChatMessage {
   const MentorChatMessage({
     required this.id,
     required this.conversationId,
+    required this.sessionId,
     required this.body,
     required this.senderType,
     required this.senderName,
@@ -78,11 +79,13 @@ class MentorChatMessage {
     this.senderEmail,
     this.status,
     this.source,
+    this.clientMessageId,
     this.isConversationStarter = false,
   });
 
   final String id;
   final String conversationId;
+  final String sessionId;
   final String body;
   final MentorChatSenderType senderType;
   final String senderName;
@@ -90,6 +93,7 @@ class MentorChatMessage {
   final String? senderEmail;
   final String? status;
   final String? source;
+  final String? clientMessageId;
   final bool isConversationStarter;
 
   bool get isMine => senderType == MentorChatSenderType.user;
@@ -97,26 +101,31 @@ class MentorChatMessage {
   bool get isSystem => senderType == MentorChatSenderType.system;
   bool get isResolved => (status ?? '').toLowerCase() == 'resolved';
   bool get isRead => (status ?? '').toLowerCase() == 'read';
+  bool get isSending => (status ?? '').toLowerCase() == 'sending';
+  bool get isFailed => (status ?? '').toLowerCase() == 'failed';
 
-  factory MentorChatMessage.fromRootDocument(
+  factory MentorChatMessage.fromThreadSummary(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {
     final data = doc.data();
     return MentorChatMessage(
-      id: '${doc.id}-root',
+      id: (data['lastMessageId']?.toString().trim().isNotEmpty ?? false)
+          ? data['lastMessageId'].toString()
+          : '${doc.id}-summary',
       conversationId: doc.id,
-      body: _messageBody(data),
-      senderType: _isAdminMessage(data)
+      sessionId: (data['sessionId'] as String?) ?? '',
+      body: _summaryBody(data),
+      senderType: _isAdminSummary(data)
           ? MentorChatSenderType.admin
           : MentorChatSenderType.user,
-      senderName: _displayName(data),
-      senderEmail: _email(data),
+      senderName: _summaryDisplayName(data),
+      senderEmail: _summaryEmail(data),
       createdAt: _coerceDate(
-        data['createdAt'] ?? data['sentAt'] ?? data['timestamp'],
+        data['lastMessageAt'] ?? data['updatedAt'] ?? data['createdAt'],
       ),
       status: data['status'] as String?,
       source: data['source'] as String?,
-      isConversationStarter: true,
+      clientMessageId: data['clientMessageId']?.toString(),
     );
   }
 
@@ -128,6 +137,7 @@ class MentorChatMessage {
     return MentorChatMessage(
       id: data['id']?.toString() ?? fallbackId,
       conversationId: conversationId,
+      sessionId: (data['sessionId'] as String?) ?? '',
       body: _messageBody(data),
       senderType: _isAdminMessage(data)
           ? MentorChatSenderType.admin
@@ -139,7 +149,53 @@ class MentorChatMessage {
       ),
       status: data['status'] as String?,
       source: data['source']?.toString(),
+      clientMessageId: data['clientMessageId']?.toString(),
     );
+  }
+
+  factory MentorChatMessage.fromCache(Map<String, dynamic> data) {
+    final senderLabel = '${data['senderType'] ?? 'user'}'.toLowerCase();
+    final senderType = switch (senderLabel) {
+      'admin' => MentorChatSenderType.admin,
+      'system' => MentorChatSenderType.system,
+      _ => MentorChatSenderType.user,
+    };
+
+    return MentorChatMessage(
+      id: data['id']?.toString() ?? '',
+      conversationId: data['conversationId']?.toString() ?? '',
+      sessionId: data['sessionId']?.toString() ?? '',
+      body: data['body']?.toString() ?? '',
+      senderType: senderType,
+      senderName: data['senderName']?.toString() ?? 'Unknown',
+      createdAt: _coerceDate(data['createdAt']),
+      senderEmail: data['senderEmail']?.toString(),
+      status: data['status']?.toString(),
+      source: data['source']?.toString(),
+      clientMessageId: data['clientMessageId']?.toString(),
+      isConversationStarter: data['isConversationStarter'] == true,
+    );
+  }
+
+  Map<String, dynamic> toCacheMap() {
+    return <String, dynamic>{
+      'id': id,
+      'conversationId': conversationId,
+      'sessionId': sessionId,
+      'body': body,
+      'senderType': switch (senderType) {
+        MentorChatSenderType.user => 'user',
+        MentorChatSenderType.admin => 'admin',
+        MentorChatSenderType.system => 'system',
+      },
+      'senderName': senderName,
+      'createdAt': createdAt.toIso8601String(),
+      'senderEmail': senderEmail,
+      'status': status,
+      'source': source,
+      'clientMessageId': clientMessageId,
+      'isConversationStarter': isConversationStarter,
+    };
   }
 }
 
@@ -154,11 +210,19 @@ String _messageBody(Map<String, dynamic> data) {
       (data['message'] as String?)?.trim() ??
       (data['text'] as String?)?.trim() ??
       (data['content'] as String?)?.trim() ??
-      (data['lastMessage'] as String?)?.trim() ??
       '';
 }
 
+String _summaryBody(Map<String, dynamic> data) {
+  return (data['lastMessagePreview'] as String?)?.trim() ??
+      (data['lastMessage'] as String?)?.trim() ??
+      _messageBody(data);
+}
+
 String _displayName(Map<String, dynamic> data) {
+  if (_isAdminMessage(data)) {
+    return 'Mentor';
+  }
   return (data['name'] as String?)?.trim() ??
       (data['fullName'] as String?)?.trim() ??
       (data['senderName'] as String?)?.trim() ??
@@ -166,10 +230,27 @@ String _displayName(Map<String, dynamic> data) {
       'Unknown';
 }
 
+String _summaryDisplayName(Map<String, dynamic> data) {
+  if (_isAdminSummary(data)) {
+    return (data['lastMessageSenderName'] as String?)?.trim().isNotEmpty == true
+        ? (data['lastMessageSenderName'] as String).trim()
+        : 'Mentor';
+  }
+  return (data['studentName'] as String?)?.trim() ??
+      (data['name'] as String?)?.trim() ??
+      _displayName(data);
+}
+
 String _email(Map<String, dynamic> data) {
   return (data['email'] as String?)?.trim() ??
       (data['senderEmail'] as String?)?.trim() ??
       '';
+}
+
+String _summaryEmail(Map<String, dynamic> data) {
+  return (data['lastMessageSenderEmail'] as String?)?.trim() ??
+      (data['studentEmail'] as String?)?.trim() ??
+      _email(data);
 }
 
 bool _isAdminMessage(Map<String, dynamic> data) {
@@ -181,4 +262,9 @@ bool _isAdminMessage(Map<String, dynamic> data) {
   return senderType == 'admin' ||
       source == 'admin-dashboard' ||
       sentBy == 'admin';
+}
+
+bool _isAdminSummary(Map<String, dynamic> data) {
+  return '${data['lastMessageSenderType'] ?? ''}'.toLowerCase() == 'admin' ||
+      _isAdminMessage(data);
 }

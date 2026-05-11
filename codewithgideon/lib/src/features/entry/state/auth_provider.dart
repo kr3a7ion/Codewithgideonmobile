@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show FutureProvider, Provider, Ref;
@@ -58,6 +59,10 @@ final firebaseAuthProvider = Provider<FirebaseAuth>((ref) {
 
 final firebaseFirestoreProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
+});
+
+final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) {
+  return FirebaseFunctions.instanceFor(region: 'us-central1');
 });
 
 final apiClientProvider = Provider<ApiClient>((ref) => const ApiClient());
@@ -145,6 +150,25 @@ class AuthController extends StateNotifier<AuthState> {
     }
   }
 
+  Future<void> signInWithGoogle() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final repository = await _repository;
+      final session = await repository.signInWithGoogle();
+      state = AuthState(
+        status: AuthStatus.authenticated,
+        session: session,
+        isLoading: false,
+      );
+    } catch (error) {
+      state = AuthState(
+        status: AuthStatus.unauthenticated,
+        isLoading: false,
+        errorMessage: _friendlyAuthError(error),
+      );
+    }
+  }
+
   Future<void> completeRegistration(EnrollmentStatus status) async {
     if (state.session == null) return;
     final repository = await _repository;
@@ -206,13 +230,27 @@ String _friendlyAuthError(Object error) {
       'invalid-credential' => 'Your email or password is incorrect.',
       'too-many-requests' =>
         'Too many attempts right now. Please wait a moment and try again.',
+      'user-disabled' =>
+        'This account has been disabled. Please contact support for help.',
+      'account-exists-with-different-credential' =>
+        'This email is already linked to another sign-in method. Sign in with your original method first.',
       'network-request-failed' =>
         'We could not reach the server. Check your connection and try again.',
+      'operation-not-allowed' =>
+        'This sign-in method is not enabled right now. Please contact support.',
+      'popup-closed-by-user' =>
+        'Google sign-in was cancelled before it finished.',
+      'popup-blocked' =>
+        'Google sign-in was blocked. Please allow pop-ups and try again.',
       _ =>
         error.message?.trim().isNotEmpty == true
             ? error.message!.trim()
             : 'Something went wrong. Please try again.',
     };
+  }
+
+  if (error is PendingGoogleLinkException) {
+    return 'This email already has an account. Sign in with your original method once and we will connect Google automatically for your next login.';
   }
 
   final raw = '$error'.replaceFirst('Exception: ', '').trim();

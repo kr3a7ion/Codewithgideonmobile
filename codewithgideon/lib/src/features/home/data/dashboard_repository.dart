@@ -1,8 +1,9 @@
-import '../../../core/network/api_client.dart';
 import '../../../core/data/demo_data.dart';
+import '../../../core/network/api_client.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../cohorts/data/cohort_repository.dart';
 import '../../cohorts/models/cohort_session_model.dart';
+import '../../resources/data/resource_repository.dart';
 import '../../student/data/student_repository.dart';
 import '../models/student_dashboard_snapshot.dart';
 
@@ -11,15 +12,18 @@ class DashboardRepository {
     required ApiClient apiClient,
     required CatalogRepository catalogRepository,
     required CohortRepository cohortRepository,
+    required ResourceRepository resourceRepository,
     required StudentRepository studentRepository,
   }) : _apiClient = apiClient,
        _catalogRepository = catalogRepository,
        _cohortRepository = cohortRepository,
+       _resourceRepository = resourceRepository,
        _studentRepository = studentRepository;
 
   final ApiClient _apiClient;
   final CatalogRepository _catalogRepository;
   final CohortRepository _cohortRepository;
+  final ResourceRepository _resourceRepository;
   final StudentRepository _studentRepository;
 
   Future<StudentDashboardSnapshot> fetchDashboard({
@@ -44,6 +48,11 @@ class DashboardRepository {
       final allCohortSessions = await _cohortRepository.getSessionsForCohort(
         profile.cohortKey ?? activeCohort.cohortKey,
       );
+      final libraryResources = await _resourceRepository
+          .getPublishedResourcesForStudent(
+            profile: profile,
+            resolvedCourseId: course.id,
+          );
 
       final unlockedSessions =
           profile.isPending || profile.hasPendingInitialPayment
@@ -71,7 +80,14 @@ class DashboardRepository {
                   description: session.notes.isEmpty
                       ? 'Recorded session from your live cohort class.'
                       : session.notes,
-                  resources: const [],
+                  // Keep lesson attachments explicit so the dashboard only shows
+                  // resources that the admin intentionally linked to this class.
+                  resources: _resourceRepository.resourcesForSession(
+                    resources: libraryResources,
+                    session: session,
+                    pathId: profile.pathId,
+                    courseId: course.id,
+                  ),
                 ),
               )
               .toList()
@@ -84,6 +100,7 @@ class DashboardRepository {
         activeCohort: activeCohort,
         unlockedSessions: unlockedSessions,
         recordedLessons: recordedLessons,
+        libraryResources: libraryResources,
       );
     }, latency: const Duration(milliseconds: 550));
   }

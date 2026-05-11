@@ -677,7 +677,9 @@ class PremiumPageHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final titleColor = onDark ? Colors.white : AppColors.deepBlueDark;
-    final subtitleColor = onDark ? Colors.white70 : AppColors.mutedForeground;
+    final subtitleColor = onDark
+        ? AppColors.darkMutedForeground
+        : AppColors.mutedForeground;
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
