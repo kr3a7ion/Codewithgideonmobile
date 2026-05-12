@@ -99,10 +99,9 @@ class AuthRepository {
     required String password,
   }) async {
     final normalizedEmail = email.trim();
-    final normalizedPassword = password.trim();
     final credential = await _firebaseAuth.signInWithEmailAndPassword(
       email: normalizedEmail,
-      password: normalizedPassword,
+      password: password,
     );
     await _linkPendingGoogleIfNeeded(credential.user);
     await markOnboardingSeen();
@@ -115,7 +114,7 @@ class AuthRepository {
   }) async {
     final credential = await _firebaseAuth.createUserWithEmailAndPassword(
       email: email.trim(),
-      password: password.trim(),
+      password: password,
     );
     await markOnboardingSeen();
     try {

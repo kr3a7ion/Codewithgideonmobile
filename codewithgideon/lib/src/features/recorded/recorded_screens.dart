@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../core/data/demo_data.dart';
+import '../../core/services/playback_security_service.dart';
 import '../../core/state/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
@@ -107,10 +110,12 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
   bool _isLoading = true;
   bool _isPlayable = true;
   bool _isFullscreen = false;
+  bool _didEnableSecurePlayback = false;
 
   @override
   void initState() {
     super.initState();
+    _enableSecurePlayback();
     final recordingUri = Uri.tryParse(widget.session.recordingUrl);
     final videoId = recordingUri == null
         ? null
@@ -122,20 +127,25 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
           autoPlay: true,
           mute: false,
           loop: false,
-          disableDragSeek: false,
+          disableDragSeek: true,
           enableCaption: false,
           forceHD: false,
-          hideControls: false,
-          controlsVisibleAtStart: true,
-          hideThumbnail: false,
+          hideControls: true,
+          controlsVisibleAtStart: false,
+          hideThumbnail: true,
           showLiveFullscreenButton: false,
-          // Disable related videos and navigation
-          // forceHideAnnotation: true, // Removed: not a valid parameter
         ),
       )..addListener(_onPlayerStateChange);
     } else {
       _isPlayable = false;
       _isLoading = false;
+    }
+  }
+
+  Future<void> _enableSecurePlayback() async {
+    await PlaybackSecurityService.enableSecurePlayback();
+    if (mounted) {
+      _didEnableSecurePlayback = true;
     }
   }
 
@@ -149,6 +159,9 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
   @override
   void dispose() {
     _controller?.dispose();
+    if (_didEnableSecurePlayback) {
+      PlaybackSecurityService.disableSecurePlayback();
+    }
     super.dispose();
   }
 
@@ -187,16 +200,18 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
         isPlayable: _isPlayable,
         isLoading: _isLoading,
         player: null,
+        controller: controller,
       );
     }
 
     return YoutubePlayerBuilder(
       onEnterFullScreen: () {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
         if (!mounted) return;
         setState(() => _isFullscreen = true);
       },
       onExitFullScreen: () {
-        SystemChrome.setPreferredOrientations(DeviceOrientation.values);
+        SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
         if (!mounted) return;
         setState(() => _isFullscreen = false);
@@ -212,6 +227,7 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
           isLoading: _isLoading,
           player: playerWidget,
           isFullscreen: _isFullscreen,
+          controller: controller,
         );
       },
     );
@@ -227,6 +243,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
     required this.isPlayable,
     required this.isLoading,
     required this.player,
+    required this.controller,
     this.isFullscreen = false,
   });
 
@@ -237,6 +254,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
   final bool isPlayable;
   final bool isLoading;
   final Widget? player;
+  final YoutubePlayerController? controller;
   final bool isFullscreen;
 
   @override
@@ -312,6 +330,16 @@ class _RecordedPlayerLayout extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                        ),
+                      ),
+                if (player != null && !isLoading && controller != null)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      ignoring: false,
+                      child: _SecurePlayerOverlay(
+                        controller: controller!,
+                        isDark: isDark,
+                      ),
                     ),
                   ),
                 if (isLoading)
@@ -352,8 +380,8 @@ class _RecordedPlayerLayout extends StatelessWidget {
                     Row(
                       children: [
                         _PlayerPill(
-                          icon: PhosphorIconsFill.playCircle,
-                          label: status.statusLabel,
+                          icon: PhosphorIconsFill.shieldCheck,
+                          label: 'In-app playback',
                           color: AppColors.teal,
                         ),
                         const Gap(10),
@@ -383,11 +411,35 @@ class _RecordedPlayerLayout extends StatelessWidget {
                     const Gap(10),
                     Text(
                       session.notes.isEmpty
-                          ? 'Recording is available now. Class notes will appear here when they are published.'
+                          ? 'Recording is available now. Playback controls stay inside the app and class notes will appear here when they are published.'
                           : session.notes,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: isDark ? Colors.white70 : Colors.black54,
                         height: 1.65,
+                      ),
+                    ),
+                    const Gap(14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? AppColors.darkMuted.withValues(alpha: 0.88)
+                            : AppColors.muted.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.teal.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Text(
+                        'Playback is locked to the in-app player surface. For stronger protection than YouTube embeds allow, recordings should move to signed private video hosting.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: isDark
+                              ? AppColors.darkForeground
+                              : AppColors.foreground,
+                          height: 1.55,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     const Gap(22),
@@ -482,6 +534,7 @@ class _PlayerPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Flexible(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -500,7 +553,9 @@ class _PlayerPill extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: Colors.white,
+                  color: isDark
+                      ? Colors.white
+                      : AppColors.foreground,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -561,7 +616,9 @@ class _RecordedShortcutCard extends StatelessWidget {
                   Text(
                     subtitle,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.mutedForeground,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? AppColors.darkMutedForeground
+                          : AppColors.mutedForeground,
                     ),
                   ),
                 ],
@@ -573,6 +630,308 @@ class _RecordedShortcutCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SecurePlayerOverlay extends StatefulWidget {
+  const _SecurePlayerOverlay({
+    required this.controller,
+    required this.isDark,
+  });
+
+  final YoutubePlayerController controller;
+  final bool isDark;
+
+  @override
+  State<_SecurePlayerOverlay> createState() => _SecurePlayerOverlayState();
+}
+
+class _SecurePlayerOverlayState extends State<_SecurePlayerOverlay> {
+  Timer? _hideTimer;
+  bool _controlsVisible = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleHide();
+  }
+
+  @override
+  void dispose() {
+    _hideTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleHide() {
+    _hideTimer?.cancel();
+    _hideTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _controlsVisible = false);
+    });
+  }
+
+  void _showControls() {
+    if (!_controlsVisible) {
+      setState(() => _controlsVisible = true);
+    }
+    _scheduleHide();
+  }
+
+  void _toggleControls() {
+    if (_controlsVisible) {
+      _hideTimer?.cancel();
+      setState(() => _controlsVisible = false);
+      return;
+    }
+    _showControls();
+  }
+
+  Future<void> _toggleFullscreen() async {
+    final isFullScreen = widget.controller.value.isFullScreen;
+    if (!isFullScreen) {
+      await SystemChrome.setPreferredOrientations([
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+    widget.controller.toggleFullScreenMode();
+    _showControls();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.center,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _toggleControls,
+        child: ValueListenableBuilder<YoutubePlayerValue>(
+          valueListenable: widget.controller,
+        builder: (context, value, _) {
+          final duration = value.metaData.duration;
+          final durationLabel = _formatPlaybackClock(duration);
+          final positionLabel = _formatPlaybackClock(value.position);
+          final canTogglePlayback = value.isReady && !value.hasError;
+
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 180),
+                opacity: _controlsVisible ? 1 : 0,
+                child: IgnorePointer(
+                  ignoring: !_controlsVisible,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withValues(alpha: 0.08),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.34),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 14,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: _controlsVisible ? 1 : 0,
+                  child: IgnorePointer(
+                    ignoring: !_controlsVisible,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(
+                          alpha: widget.isDark ? 0.62 : 0.54,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          children: [
+                            _SecurePlayerControlButton(
+                              icon: Icons.replay_10_rounded,
+                              onTap: !canTogglePlayback
+                                  ? null
+                                  : () {
+                                      _seekBy(
+                                        widget.controller,
+                                        value.position,
+                                        -10,
+                                      );
+                                      _showControls();
+                                    },
+                            ),
+                            const Gap(8),
+                            InkWell(
+                              onTap: !canTogglePlayback
+                                  ? null
+                                  : () {
+                                      if (value.isPlaying) {
+                                        widget.controller.pause();
+                                      } else {
+                                        widget.controller.play();
+                                      }
+                                      _showControls();
+                                    },
+                              borderRadius: BorderRadius.circular(999),
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  value.isPlaying
+                                      ? Icons.pause_rounded
+                                      : Icons.play_arrow_rounded,
+                                  color: Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+                            const Gap(8),
+                            _SecurePlayerControlButton(
+                              icon: Icons.forward_10_rounded,
+                              onTap: !canTogglePlayback
+                                  ? null
+                                  : () {
+                                      _seekBy(
+                                        widget.controller,
+                                        value.position,
+                                        10,
+                                      );
+                                      _showControls();
+                                    },
+                            ),
+                            const Gap(12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    value.isPlaying
+                                        ? 'Playing securely in-app'
+                                        : 'Paused in-app',
+                                    style: Theme.of(context).textTheme.labelMedium
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                  ),
+                                  const Gap(3),
+                                  Text(
+                                    '$positionLabel / $durationLabel',
+                                    style: Theme.of(context).textTheme.labelSmall
+                                        ?.copyWith(
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            InkWell(
+                              onTap: value.isReady ? _toggleFullscreen : null,
+                              borderRadius: BorderRadius.circular(999),
+                              child: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.08),
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  value.isFullScreen
+                                      ? Icons.fullscreen_exit_rounded
+                                      : Icons.fullscreen_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      ),
+    );
+  }
+}
+
+class _SecurePlayerControlButton extends StatelessWidget {
+  const _SecurePlayerControlButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(icon, color: Colors.white, size: 18),
+      ),
+    );
+  }
+}
+
+void _seekBy(
+  YoutubePlayerController controller,
+  Duration currentPosition,
+  int deltaSeconds,
+) {
+  final nextPosition = currentPosition + Duration(seconds: deltaSeconds);
+  controller.seekTo(
+    nextPosition.isNegative ? Duration.zero : nextPosition,
+    allowSeekAhead: true,
+  );
+}
+
+String _formatPlaybackClock(Duration value) {
+  final safeValue = value.isNegative ? Duration.zero : value;
+  final hours = safeValue.inHours;
+  final minutes = safeValue.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = safeValue.inSeconds.remainder(60).toString().padLeft(2, '0');
+  if (hours > 0) {
+    return '$hours:$minutes:$seconds';
+  }
+  return '${safeValue.inMinutes}:$seconds';
 }
 
 String? _extractYoutubeId(Uri uri) {

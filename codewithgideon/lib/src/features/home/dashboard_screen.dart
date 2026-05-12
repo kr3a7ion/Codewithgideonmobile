@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart' show StateProvider;
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -18,17 +19,43 @@ import '../student/models/pending_payment_model.dart';
 import 'models/student_dashboard_snapshot.dart';
 import 'state/dashboard_provider.dart';
 
+final _dashboardSnapshotCacheProvider = StateProvider<StudentDashboardSnapshot?>(
+  (ref) => null,
+);
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboardState = ref.watch(dashboardSnapshotProvider);
+    ref.listen<AsyncValue<StudentDashboardSnapshot>>(dashboardSnapshotProvider, (
+      _,
+      next,
+    ) {
+      next.whenData((snapshot) {
+        ref.read(_dashboardSnapshotCacheProvider.notifier).state = snapshot;
+      });
+    });
+    final cachedSnapshot = ref.watch(_dashboardSnapshotCacheProvider);
+    final showSyncing = dashboardState.isLoading && cachedSnapshot != null;
+    final syncError = dashboardState.asError?.error;
     // Watch for notifications
     ref.watch(dashboardNotificationsProvider);
 
+    if (cachedSnapshot != null) {
+      return DoubleBackToExitScope(
+        child: _DashboardContent(
+          snapshot: cachedSnapshot,
+          isSyncing: showSyncing,
+          syncErrorMessage: syncError == null
+              ? null
+              : 'Some dashboard sections could not refresh just now. Showing your last synced view.',
+        ),
+      );
+    }
+
     return dashboardState.when(
-      // Match the final layout with a shimmer shell so loading feels intentional.
       loading: () => const DoubleBackToExitScope(
         child: SafeArea(child: _DashboardShimmer()),
       ),
@@ -43,16 +70,23 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
       ),
-      data: (dashboard) =>
-          DoubleBackToExitScope(child: _DashboardContent(snapshot: dashboard)),
+      data: (dashboard) => DoubleBackToExitScope(
+        child: _DashboardContent(snapshot: dashboard),
+      ),
     );
   }
 }
 
 class _DashboardContent extends ConsumerWidget {
-  const _DashboardContent({required this.snapshot});
+  const _DashboardContent({
+    required this.snapshot,
+    this.isSyncing = false,
+    this.syncErrorMessage,
+  });
 
   final StudentDashboardSnapshot snapshot;
+  final bool isSyncing;
+  final String? syncErrorMessage;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -79,6 +113,13 @@ class _DashboardContent extends ConsumerWidget {
                   children: [
                     _DashboardHeader(snapshot: snapshot),
                     const Gap(20),
+                    if (isSyncing || syncErrorMessage != null) ...[
+                      _DashboardSyncBanner(
+                        isSyncing: isSyncing,
+                        message: syncErrorMessage,
+                      ),
+                      const Gap(16),
+                    ],
                     _DashboardHero(
                       snapshot: snapshot,
                       onPrimaryAction: snapshot.hasAnyPending
@@ -753,6 +794,64 @@ class _CourseRoadmap extends StatelessWidget {
             ),
             if (index != roadmapItems.length - 1) const Gap(12),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardSyncBanner extends StatelessWidget {
+  const _DashboardSyncBanner({
+    required this.isSyncing,
+    required this.message,
+  });
+
+  final bool isSyncing;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = message == null ? AppColors.teal : AppColors.orange;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark
+            ? accent.withValues(alpha: 0.14)
+            : accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 20,
+            height: 20,
+            child: isSyncing
+                ? const CircularProgressIndicator(strokeWidth: 2.1)
+                : Icon(
+                    PhosphorIconsFill.warningCircle,
+                    color: accent,
+                    size: 18,
+                  ),
+          ),
+          const Gap(10),
+          Expanded(
+            child: Text(
+              message ??
+                  'Refreshing your dashboard sections in the background. Your last synced view stays available while new data arrives.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isDark
+                    ? AppColors.darkForeground
+                    : AppColors.foreground,
+                fontWeight: FontWeight.w600,
+                height: 1.45,
+              ),
+            ),
+          ),
         ],
       ),
     );

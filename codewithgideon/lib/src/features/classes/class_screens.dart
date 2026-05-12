@@ -851,21 +851,32 @@ class _ClassBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final foreground = isDark
+        ? Color.lerp(tint, Colors.white, 0.22) ?? tint
+        : tint;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.12),
+        color: isDark
+            ? tint.withValues(alpha: 0.22)
+            : tint.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isDark
+              ? tint.withValues(alpha: 0.3)
+              : tint.withValues(alpha: 0.12),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: tint),
+          Icon(icon, size: 14, color: foreground),
           const Gap(6),
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: tint,
+              color: foreground,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -889,6 +900,7 @@ class _ClassMeta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconTone = isDark ? AppColors.tealLight : AppColors.tealDark;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -896,6 +908,11 @@ class _ClassMeta extends StatelessWidget {
             ? AppColors.darkMuted.withValues(alpha: 0.82)
             : AppColors.muted.withValues(alpha: 0.78),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.06)
+              : AppColors.deepBlue.withValues(alpha: 0.05),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -903,7 +920,7 @@ class _ClassMeta extends StatelessWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: AppColors.tealDark),
+              Icon(icon, size: 16, color: iconTone),
               const Gap(8),
               Flexible(
                 child: Text(
@@ -938,16 +955,26 @@ class _StatusPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLive = label == 'Live';
     final tone = isLive ? AppColors.teal : AppColors.deepBlue;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.1),
+        color: isDark
+            ? tone.withValues(alpha: 0.22)
+            : tone.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isDark
+              ? tone.withValues(alpha: 0.3)
+              : tone.withValues(alpha: 0.12),
+        ),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: tone,
+          color: isDark
+              ? Color.lerp(tone, Colors.white, 0.18) ?? tone
+              : tone,
           fontWeight: FontWeight.w700,
         ),
       ),

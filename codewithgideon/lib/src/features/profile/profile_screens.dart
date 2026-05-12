@@ -12,31 +12,28 @@ import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../home/models/student_dashboard_snapshot.dart';
 
-const _settingsContactLinks = <({
-  IconData icon,
-  String title,
-  String subtitle,
-  String url,
-})>[
-  (
-    icon: Icons.camera_alt_outlined,
-    title: 'Instagram',
-    subtitle: '@c0dewithgideon',
-    url: 'https://www.instagram.com/c0dewithgideon',
-  ),
-  (
-    icon: Icons.music_note_rounded,
-    title: 'TikTok',
-    subtitle: '@codewithgideon',
-    url: 'https://www.tiktok.com/@codewithgideon',
-  ),
-  (
-    icon: Icons.chat_bubble_outline_rounded,
-    title: 'WhatsApp',
-    subtitle: 'Direct chat with the team',
-    url: 'https://api.whatsapp.com/message/NMQR2ZKNJTZBL1?autoload=1&app_absent=0',
-  ),
-];
+const _settingsContactLinks =
+    <({IconData icon, String title, String subtitle, String url})>[
+      (
+        icon: Icons.camera_alt_outlined,
+        title: 'Instagram',
+        subtitle: '@c0dewithgideon',
+        url: 'https://www.instagram.com/c0dewithgideon',
+      ),
+      (
+        icon: Icons.music_note_rounded,
+        title: 'TikTok',
+        subtitle: '@codewithgideon',
+        url: 'https://www.tiktok.com/@codewithgideon',
+      ),
+      (
+        icon: Icons.chat_bubble_outline_rounded,
+        title: 'WhatsApp',
+        subtitle: 'Direct chat with the team',
+        url:
+            'https://api.whatsapp.com/message/NMQR2ZKNJTZBL1?autoload=1&app_absent=0',
+      ),
+    ];
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -266,11 +263,11 @@ class ProfileScreen extends ConsumerWidget {
                       ).cardColor.withValues(alpha: 0.82),
                       child: Column(
                         children: [
-                          
                           _ProfileAction(
                             icon: Icons.workspace_premium_outlined,
-                            title: 'Certificates',
-                            subtitle: 'See badges and progress milestones',
+                            title: 'Weekly Badges',
+                            subtitle:
+                                'Track every earned week and your next milestone',
                             onTap: () => context.push('/certificates'),
                           ),
                           const Divider(height: 22),
@@ -308,8 +305,8 @@ class CertificatesScreen extends ConsumerWidget {
           top: false,
           child: AppLoadingState(
             compact: true,
-            title: 'Loading achievements...',
-            message: 'Building your cohort milestone timeline.',
+            title: 'Loading badges...',
+            message: 'Preparing your weekly milestone journey.',
           ),
         ),
       ),
@@ -318,14 +315,32 @@ class CertificatesScreen extends ConsumerWidget {
           top: false,
           child: AppErrorState(
             compact: true,
-            title: 'Achievements unavailable',
-            message: 'We could not load your cohort progress right now.',
+            title: 'Badges unavailable',
+            message: 'We could not build your weekly badge journey right now.',
             onRetry: () => ref.refresh(dashboardSnapshotProvider),
           ),
         ),
       ),
       data: (dashboard) {
-        final achievements = _buildCohortAchievements(dashboard);
+        final badgeTimeline = _buildWeeklyBadgeTimeline(dashboard);
+        final spotlight = _spotlightBadgeForTimeline(badgeTimeline);
+        final completedWeeks = _completedWeeksForDashboard(dashboard);
+        final totalWeeks = dashboard.totalProgramWeeks <= 0
+            ? 1
+            : dashboard.totalProgramWeeks;
+        final progress = totalWeeks == 0 ? 0.0 : completedWeeks / totalWeeks;
+        final remainingWeeks = (totalWeeks - completedWeeks).clamp(
+          0,
+          totalWeeks,
+        );
+        final earnedBadges = badgeTimeline
+            .where((item) => item.earned)
+            .toList();
+        final nextBadge = badgeTimeline.firstWhere(
+          (item) => !item.earned,
+          orElse: () =>
+              badgeTimeline.isEmpty ? _fallbackBadge() : badgeTimeline.last,
+        );
 
         return AppScreen(
           body: SafeArea(
@@ -334,99 +349,341 @@ class CertificatesScreen extends ConsumerWidget {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
               children: [
-                PremiumPageHeader(
-                  title: 'Achievements',
-                  subtitle:
-                      'Milestones are now generated from your real cohort access, sessions, and progress.',
-                  leading: PremiumIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    onTap: () => context.pop(),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+                  decoration: BoxDecoration(
+                    gradient: Theme.of(context).brightness == Brightness.dark
+                        ? const LinearGradient(
+                            colors: [
+                              AppColors.deepBlueDark,
+                              Color(0xFF102548),
+                              AppColors.tealDark,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : const LinearGradient(
+                            colors: [
+                              Color(0xFF0E2C63),
+                              Color(0xFF1C4986),
+                              Color(0xFF117781),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                    borderRadius: BorderRadius.circular(32),
+                    boxShadow: AppShadows.premium,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      PremiumPageHeader(
+                        title: 'Journey Badges',
+                        subtitle:
+                            'A new badge drops at the end of each completed week, using your real cohort progress.',
+                        onDark: true,
+                        leading: PremiumIconButton(
+                          icon: Icons.arrow_back_rounded,
+                          onTap: () => context.pop(),
+                          isDark: true,
+                        ),
+                      ),
+                      const Gap(18),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _BadgeHeroStat(
+                              label: 'Completed',
+                              value: '$completedWeeks/$totalWeeks',
+                            ),
+                          ),
+                          const Gap(10),
+                          Expanded(
+                            child: _BadgeHeroStat(
+                              label: 'Earned',
+                              value: '${earnedBadges.length}',
+                            ),
+                          ),
+                          const Gap(10),
+                          Expanded(
+                            child: _BadgeHeroStat(
+                              label: 'Next',
+                              value: 'Wk ${nextBadge.week}',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const Gap(16),
-                for (final item in achievements) ...[
-                  AppCard(
-                    radius: 28,
-                    color: Theme.of(context).cardColor.withValues(alpha: 0.82),
+                const Gap(18),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF111C2E)
+                        : Colors.white.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(30),
                     border: Border.all(
-                      color: item.unlocked
-                          ? item.accent.withValues(alpha: 0.18)
-                          : AppColors.deepBlue.withValues(alpha: 0.06),
+                      color: spotlight.color.withValues(alpha: 0.18),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: item.accent.withValues(
-                              alpha: item.unlocked ? 0.14 : 0.08,
+                  ),
+                  child: Column(
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 160,
+                            height: 160,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: spotlight.color.withValues(alpha: 0.18),
                             ),
-                            borderRadius: BorderRadius.circular(18),
+                            child: const SizedBox.shrink(),
                           ),
-                          alignment: Alignment.center,
-                          child: Icon(item.icon, color: item.accent),
+                          Text(
+                            spotlight.badge,
+                            style: const TextStyle(fontSize: 68, height: 1),
+                          ),
+                        ],
+                      ),
+                      const Gap(18),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 7,
                         ),
-                        const Gap(14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
+                        decoration: BoxDecoration(
+                          color: spotlight.color.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: spotlight.color.withValues(alpha: 0.34),
+                          ),
+                        ),
+                        child: Text(
+                          'Week ${spotlight.week} · ${spotlight.tier}',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: spotlight.color,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                      const Gap(12),
+                      Text(
+                        spotlight.title,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const Gap(8),
+                      Text(
+                        '"${spotlight.tagline}"',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: _muted(context),
+                          height: 1.6,
+                        ),
+                      ),
+                      const Gap(18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? AppColors.darkSurface.withValues(alpha: 0.9)
+                              : AppColors.muted.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: spotlight.color,
+                                  width: 2,
+                                ),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    spotlight.color.withValues(alpha: 0.26),
+                                    spotlight.color.withValues(alpha: 0.08),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              alignment: Alignment.center,
+                              child: const Text(
+                                '👤',
+                                style: TextStyle(fontSize: 18),
+                              ),
+                            ),
+                            const Gap(12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      item.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
+                                  Text(
+                                    dashboard.profile.fullName,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(fontWeight: FontWeight.w800),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: item.accent.withValues(
-                                        alpha: item.unlocked ? 0.14 : 0.08,
-                                      ),
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                    child: Text(
-                                      item.unlocked ? 'Unlocked' : 'In view',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelSmall
-                                          ?.copyWith(
-                                            color: item.accent,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                    ),
+                                  const Gap(6),
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: earnedBadges.isEmpty
+                                        ? [
+                                            Text(
+                                              spotlight.badge,
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          ]
+                                        : [
+                                            for (final badge in earnedBadges)
+                                              Text(
+                                                badge.badge,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                ),
+                                              ),
+                                          ],
                                   ),
                                 ],
                               ),
-                              const Gap(8),
-                              Text(
-                                item.description,
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      color: _muted(context),
-                                      height: 1.55,
-                                    ),
-                              ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                ),
+                const Gap(18),
+                Row(
+                  children: [
+                    Text(
+                      'All $totalWeeks Weeks',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      completedWeeks == totalWeeks && totalWeeks > 0
+                          ? 'Complete'
+                          : '$remainingWeeks left',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: spotlight.color,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(8),
+                Text(
+                  'Each badge marks a completed week in your cohort journey.',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: _muted(context)),
+                ),
+                const Gap(12),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxExtent = totalWeeks <= 4
+                        ? 190.0
+                        : totalWeeks <= 6
+                        ? 156.0
+                        : 132.0;
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: badgeTimeline.length,
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: maxExtent,
+                        mainAxisSpacing: 10,
+                        crossAxisSpacing: 10,
+                        mainAxisExtent: 154,
+                      ),
+                      itemBuilder: (context, index) {
+                        final item = badgeTimeline[index];
+                        final isSpotlight = item.week == spotlight.week;
+                        return _WeekBadgeTile(
+                          item: item,
+                          isSpotlight: isSpotlight,
+                        );
+                      },
+                    );
+                  },
+                ),
+                const Gap(22),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF111C2E)
+                        : Colors.white.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(26),
+                    border: Border.all(
+                      color: spotlight.color.withValues(alpha: 0.16),
                     ),
                   ),
-                  const Gap(12),
-                ],
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Session Progress',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w800),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '${(progress * 100).round()}%',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: spotlight.color,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        ],
+                      ),
+                      const Gap(12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(999),
+                        child: LinearProgressIndicator(
+                          value: progress.clamp(0, 1),
+                          minHeight: 8,
+                          backgroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                              ? AppColors.darkMuted
+                              : AppColors.muted,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            spotlight.color,
+                          ),
+                        ),
+                      ),
+                      const Gap(12),
+                      Text(
+                        remainingWeeks == 0 && totalWeeks > 0
+                            ? 'You cleared the full session and earned every weekly badge.'
+                            : '$remainingWeeks week${remainingWeeks == 1 ? '' : 's'} remaining before you finish the journey.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: _muted(context),
+                          height: 1.55,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -573,12 +830,12 @@ class SettingsScreen extends ConsumerWidget {
       return;
     }
 
-    final launched = await launchUrl(
-      uri,
-      mode: LaunchMode.externalApplication,
-    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!launched && context.mounted) {
-      showAppSnackBar(context, 'We could not open that contact link right now.');
+      showAppSnackBar(
+        context,
+        'We could not open that contact link right now.',
+      );
     }
   }
 
@@ -669,15 +926,17 @@ class SettingsScreen extends ConsumerWidget {
                       ),
                       const Gap(8),
                       Text(
-                        'Reach CodeWithGideon through the same social channels listed on the web experience.',
+                        'We love hearing from our students and community!',
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: _muted(context)),
                       ),
                       const Gap(18),
-                      for (var index = 0;
-                          index < _settingsContactLinks.length;
-                          index++) ...[
+                      for (
+                        var index = 0;
+                        index < _settingsContactLinks.length;
+                        index++
+                      ) ...[
                         _ProfileAction(
                           icon: _settingsContactLinks[index].icon,
                           title: _settingsContactLinks[index].title,
@@ -1044,10 +1303,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                         Text(
                           section.$2,
                           style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                                color: _muted(context),
-                                height: 1.6,
-                              ),
+                              ?.copyWith(color: _muted(context), height: 1.6),
                         ),
                         if (section != sections.last) const Gap(22),
                       ],
@@ -1086,95 +1342,409 @@ StudentDashboardSnapshot? _dashboardSnapshotOrNull(
   return value.maybeWhen(data: (snapshot) => snapshot, orElse: () => null);
 }
 
-class _CohortAchievement {
-  const _CohortAchievement({
+class _WeeklyBadgeMilestone {
+  const _WeeklyBadgeMilestone({
+    required this.week,
+    required this.badge,
     required this.title,
-    required this.description,
-    required this.icon,
-    required this.accent,
-    required this.unlocked,
+    required this.tagline,
+    required this.color,
+    required this.tier,
+    required this.earned,
   });
 
+  final int week;
+  final String badge;
   final String title;
-  final String description;
-  final IconData icon;
-  final Color accent;
-  final bool unlocked;
+  final String tagline;
+  final Color color;
+  final String tier;
+  final bool earned;
 }
 
-List<_CohortAchievement> _buildCohortAchievements(
+class _WeeklyBadgeTemplate {
+  const _WeeklyBadgeTemplate({
+    required this.badge,
+    required this.title,
+    required this.tagline,
+    required this.color,
+    required this.tier,
+  });
+
+  final String badge;
+  final String title;
+  final String tagline;
+  final Color color;
+  final String tier;
+}
+
+const _allWeeklyBadgeTemplates = <_WeeklyBadgeTemplate>[
+  _WeeklyBadgeTemplate(
+    badge: '🌱',
+    title: 'First Step',
+    tagline: 'You showed up. That is where every serious journey begins.',
+    color: Color(0xFF4ADE80),
+    tier: 'Starter',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🔥',
+    title: 'On Fire',
+    tagline: 'Momentum is building and your weekly rhythm is real now.',
+    color: Color(0xFFFB923C),
+    tier: 'Ignited',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '⚡',
+    title: 'Live Wire',
+    tagline: 'You are in the zone and your effort is starting to compound.',
+    color: Color(0xFFFACC15),
+    tier: 'Charged',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🏅',
+    title: 'One Month Strong',
+    tagline: 'A full month in. Your consistency is no longer accidental.',
+    color: Color(0xFFC084FC),
+    tier: 'Milestone',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '💪',
+    title: 'Crushing It',
+    tagline: 'You keep showing up and the progress is starting to look loud.',
+    color: Color(0xFFF472B6),
+    tier: 'Crusher',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🌊',
+    title: 'Halfway Hero',
+    tagline:
+        'Past the midpoint. You have carried this journey too far to stop.',
+    color: Color(0xFF38BDF8),
+    tier: 'Midpoint',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🎯',
+    title: 'Locked In',
+    tagline: 'Focused, consistent, and steadily turning effort into mastery.',
+    color: Color(0xFFFB7185),
+    tier: 'Focused',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🦅',
+    title: 'Soaring',
+    tagline: 'You are moving with confidence now and it shows in every week.',
+    color: Color(0xFF818CF8),
+    tier: 'Elevated',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '💎',
+    title: 'Diamond Grit',
+    tagline: 'Pressure reveals the sharpest learners and you are proving it.',
+    color: Color(0xFF67E8F9),
+    tier: 'Diamond',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🚀',
+    title: 'Launch Mode',
+    tagline:
+        'Final stretch energy. You are building toward a confident finish.',
+    color: Color(0xFFA78BFA),
+    tier: 'Launch',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '⭐',
+    title: 'Almost Legendary',
+    tagline: 'One step left. You have done too much work to coast now.',
+    color: Color(0xFFFBBF24),
+    tier: 'Legend',
+  ),
+  _WeeklyBadgeTemplate(
+    badge: '🏆',
+    title: 'Champion',
+    tagline: 'You completed the full session and earned every single week.',
+    color: Color(0xFFF59E0B),
+    tier: 'Champion',
+  ),
+];
+
+List<_WeeklyBadgeMilestone> _buildWeeklyBadgeTimeline(
   StudentDashboardSnapshot dashboard,
 ) {
-  final unlockedWeeks = dashboard.unlockedSessions.length;
-  final totalWeeks = dashboard.totalProgramWeeks;
-  final halfwayWeek = totalWeeks == 0 ? 0 : (totalWeeks / 2).ceil();
-  final hasRecordings = dashboard.recordedSessions.isNotEmpty;
-  final currentWeek = unlockedWeeks.clamp(1, totalWeeks == 0 ? 1 : totalWeeks);
-  final currentModule = _syllabusTitleForWeek(dashboard, currentWeek);
-  final midpointModule = _syllabusTitleForWeek(dashboard, halfwayWeek);
-  final finalWeek = totalWeeks == 0 ? 1 : totalWeeks;
-  final finalModule = _syllabusTitleForWeek(dashboard, finalWeek);
-
-  return [
-    _CohortAchievement(
-      title: 'Path Chosen',
-      description:
-          'You are enrolled in ${dashboard.path.title} with ${dashboard.course.title} as your active learning track.',
-      icon: Icons.route_outlined,
-      accent: AppColors.deepBlue,
-      unlocked: dashboard.path.title.trim().isNotEmpty,
-    ),
-    _CohortAchievement(
-      title: 'Foundation Module',
-      description: unlockedWeeks > 0
-          ? 'You have started the path with ${_syllabusTitleForWeek(dashboard, 1)} and your first live cohort week is unlocked.'
-          : 'Your first module, ${_syllabusTitleForWeek(dashboard, 1)}, unlocks when your opening week is published.',
-      icon: Icons.lock_open_outlined,
-      accent: AppColors.teal,
-      unlocked: unlockedWeeks > 0,
-    ),
-    _CohortAchievement(
-      title: 'Current Path Stage',
-      description: unlockedWeeks > 0
-          ? 'You currently have $unlockedWeeks of $totalWeeks weeks unlocked and are working through $currentModule.'
-          : 'Your active path stage will appear here once your first cohort week is available.',
-      icon: Icons.flag_outlined,
-      accent: AppColors.orange,
-      unlocked: unlockedWeeks > 0,
-    ),
-    _CohortAchievement(
-      title: 'Midpoint Milestone',
-      description: halfwayWeek > 0 && unlockedWeeks >= halfwayWeek
-          ? 'You have reached the midpoint of ${dashboard.path.title}, landing in $midpointModule.'
-          : 'The midpoint milestone unlocks around week $halfwayWeek when you reach $midpointModule.',
-      icon: Icons.trending_up_rounded,
-      accent: AppColors.tealDark,
-      unlocked: halfwayWeek > 0 && unlockedWeeks >= halfwayWeek,
-    ),
-    _CohortAchievement(
-      title: 'Recorded Revision Trail',
-      description: hasRecordings
-          ? '${dashboard.recordedSessions.length} replay${dashboard.recordedSessions.length == 1 ? '' : 's'} are published for revision along your path.'
-          : 'Recorded lessons will appear here when your cohort team publishes revision material.',
-      icon: Icons.video_library_outlined,
-      accent: AppColors.purple,
-      unlocked: hasRecordings,
-    ),
-    _CohortAchievement(
-      title: 'Final Stretch',
-      description: dashboard.paidWeeks >= totalWeeks && totalWeeks > 0
-          ? 'You have full paid access through the final stage of the path, ending in $finalModule.'
-          : 'You currently have ${dashboard.paidWeeks} of $totalWeeks weeks funded before reaching the final stage, $finalModule.',
-      icon: Icons.workspace_premium_outlined,
-      accent: AppColors.deepBlueLight,
-      unlocked: dashboard.paidWeeks >= totalWeeks && totalWeeks > 0,
-    ),
-  ];
+  final totalWeeks = dashboard.totalProgramWeeks <= 0
+      ? 1
+      : dashboard.totalProgramWeeks.clamp(1, 52);
+  final completedWeeks = _completedWeeksForDashboard(dashboard);
+  final templates = _templatesForProgramLength(totalWeeks);
+  return List<_WeeklyBadgeMilestone>.generate(totalWeeks, (index) {
+    final template = templates[index];
+    return _WeeklyBadgeMilestone(
+      week: index + 1,
+      badge: template.badge,
+      title: template.title,
+      tagline: template.tagline,
+      color: template.color,
+      tier: template.tier,
+      earned: index + 1 <= completedWeeks,
+    );
+  });
 }
 
-String _syllabusTitleForWeek(StudentDashboardSnapshot dashboard, int week) {
-  for (final item in dashboard.course.syllabus) {
-    if (item.week == week) return item.title;
+int _completedWeeksForDashboard(StudentDashboardSnapshot dashboard) {
+  final now = DateTime.now();
+  final completedWeeks = <int>{};
+  for (final session in dashboard.unlockedSessions) {
+    if (!session.endsAt.isAfter(now)) {
+      completedWeeks.add(session.week);
+    }
   }
-  return 'Week $week';
+  final completed = completedWeeks.length;
+  return completed.clamp(0, dashboard.totalProgramWeeks);
+}
+
+List<_WeeklyBadgeTemplate> _templatesForProgramLength(int totalWeeks) {
+  if (totalWeeks == 1) {
+    return <_WeeklyBadgeTemplate>[_allWeeklyBadgeTemplates[11]];
+  }
+  if (totalWeeks == _allWeeklyBadgeTemplates.length) {
+    return List<_WeeklyBadgeTemplate>.from(
+      _allWeeklyBadgeTemplates,
+      growable: false,
+    );
+  }
+  if (totalWeeks > _allWeeklyBadgeTemplates.length) {
+    return List<_WeeklyBadgeTemplate>.generate(totalWeeks, (index) {
+      final ratio = index / (totalWeeks - 1);
+      final mappedIndex = (ratio * (_allWeeklyBadgeTemplates.length - 1))
+          .round()
+          .clamp(0, _allWeeklyBadgeTemplates.length - 1);
+      return _allWeeklyBadgeTemplates[mappedIndex];
+    }, growable: false);
+  }
+
+  final indices = <int>[0];
+  final middleCount = totalWeeks - 2;
+  for (var i = 0; i < middleCount; i++) {
+    final idx = (1 + ((i + 1) * 10) / (middleCount + 1)).round();
+    indices.add(idx.clamp(1, 10));
+  }
+  indices.add(11);
+
+  return indices
+      .map((index) => _allWeeklyBadgeTemplates[index])
+      .toList(growable: false);
+}
+
+_WeeklyBadgeMilestone _spotlightBadgeForTimeline(
+  List<_WeeklyBadgeMilestone> timeline,
+) {
+  if (timeline.isEmpty) return _fallbackBadge();
+  for (final item in timeline) {
+    if (!item.earned) return item;
+  }
+  return timeline.last;
+}
+
+_WeeklyBadgeMilestone _fallbackBadge() {
+  return const _WeeklyBadgeMilestone(
+    week: 1,
+    badge: '🌱',
+    title: 'First Step',
+    tagline:
+        'Your weekly journey badges will appear here as your cohort progresses.',
+    color: Color(0xFF4ADE80),
+    tier: 'Starter',
+    earned: false,
+  );
+}
+
+class _BadgeHeroStat extends StatelessWidget {
+  const _BadgeHeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.darkMutedForeground,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const Gap(6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekBadgeTile extends StatelessWidget {
+  const _WeekBadgeTile({required this.item, required this.isSpotlight});
+
+  final _WeeklyBadgeMilestone item;
+  final bool isSpotlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isSpotlight
+        ? item.color.withValues(alpha: isDark ? 0.2 : 0.12)
+        : item.earned
+        ? (isDark ? const Color(0xFF111C2E) : Colors.white)
+        : (isDark ? const Color(0xFF0D1727) : const Color(0xFFF4F7FB));
+    final borderColor = isSpotlight
+        ? item.color
+        : item.earned
+        ? item.color.withValues(alpha: 0.22)
+        : Theme.of(context).dividerColor.withValues(alpha: 0.4);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            backgroundColor,
+            item.color.withValues(
+              alpha: isSpotlight
+                  ? (isDark ? 0.12 : 0.06)
+                  : item.earned
+                  ? (isDark ? 0.07 : 0.03)
+                  : 0.01,
+            ),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: isSpotlight ? 1.4 : 1),
+        boxShadow: isSpotlight
+            ? [
+                BoxShadow(
+                  color: item.color.withValues(alpha: isDark ? 0.22 : 0.14),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ]
+            : null,
+      ),
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Text(
+              item.earned ? '✦' : '·',
+              style: TextStyle(
+                color: item.color.withValues(alpha: item.earned ? 0.9 : 0.32),
+                fontSize: item.earned ? 12 : 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSpotlight
+                          ? item.color.withValues(alpha: 0.18)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: isSpotlight
+                            ? item.color.withValues(alpha: 0.38)
+                            : Theme.of(
+                                context,
+                              ).dividerColor.withValues(alpha: 0.22),
+                      ),
+                    ),
+                    child: Text(
+                      'Wk ${item.week}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: isSpotlight ? item.color : _muted(context),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  if (item.earned)
+                    Container(
+                      width: 9,
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: item.color.withValues(alpha: 0.92),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: item.color.withValues(alpha: 0.32),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                item.badge,
+                style: TextStyle(
+                  fontSize: isSpotlight ? 30 : 28,
+                  color: item.earned ? null : Colors.grey,
+                ),
+              ),
+              const Gap(8),
+              Text(
+                item.tier,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: item.earned
+                      ? _muted(context)
+                      : _muted(context).withValues(alpha: 0.72),
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+              ),
+              const Gap(8),
+              Text(
+                item.earned ? 'Earned' : 'Locked',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: item.earned
+                      ? item.color
+                      : _muted(context).withValues(alpha: 0.7),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

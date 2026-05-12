@@ -99,7 +99,8 @@ class _CommunityChannelsScreenState
                       child: Container(
                         padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
                         decoration: BoxDecoration(
-                          gradient: Theme.of(context).brightness == Brightness.dark
+                          gradient:
+                              Theme.of(context).brightness == Brightness.dark
                               ? const LinearGradient(
                                   colors: [
                                     AppColors.deepBlueDark,
@@ -180,8 +181,8 @@ class _CommunityChannelsScreenState
                                   child: _CommunityHeroStat(
                                     label: 'Mentor',
                                     value: latestMentorReply == null
-                                        ? 'Listening'
-                                        : 'Reply ready',
+                                        ? 'Active'
+                                        : 'Online',
                                   ),
                                 ),
                                 const Gap(10),
@@ -253,7 +254,9 @@ class _CommunityChannelsScreenState
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(22),
                                     borderSide: BorderSide(
-                                      color: Colors.white.withValues(alpha: 0.22),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.22,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -297,7 +300,7 @@ class _CommunityChannelsScreenState
                                   title: 'Mentor Support',
                                   eyebrow: snapshot.heroLabel,
                                   description: latestMentorReply == null
-                                      ? 'Open your private mentor thread for quick support and feedback.'
+                                      ? 'For quick support and feedback.'
                                       : latestMentorReply.body,
                                   onTap: () => context.push(route),
                                   badge: latestMentorReply == null
@@ -354,11 +357,12 @@ class _CommunityChannelsScreenState
                         ),
                         const Gap(12),
                         Text(
-                          'Tap into rooms curated for your cohort and path, with cleaner handoff into each community channel.',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: _contextMutedColor(context),
-                            height: 1.5,
-                          ),
+                          'Tap into rooms, meet, support and discuss',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: _contextMutedColor(context),
+                                height: 1.5,
+                              ),
                         ),
                         const Gap(14),
                         spaces.when(
@@ -1592,7 +1596,9 @@ class _CommunitySpaceTile extends StatelessWidget {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: accent.withValues(alpha: isDark ? 0.18 : 0.1),
+                            color: accent.withValues(
+                              alpha: isDark ? 0.18 : 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
@@ -1621,10 +1627,11 @@ class _CommunitySpaceTile extends StatelessWidget {
                     children: [
                       Text(
                         'Open room',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: accent,
-                          fontWeight: FontWeight.w800,
-                        ),
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: accent,
+                              fontWeight: FontWeight.w800,
+                            ),
                       ),
                       const Gap(6),
                       Icon(
@@ -1676,7 +1683,9 @@ class _ConnectedFeatureCard extends StatelessWidget {
               ? const Color(0xFF111C2E)
               : Colors.white.withValues(alpha: 0.96),
           borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: accent.withValues(alpha: isDark ? 0.34 : 0.14)),
+          border: Border.all(
+            color: accent.withValues(alpha: isDark ? 0.34 : 0.14),
+          ),
           boxShadow: isDark
               ? null
               : [
@@ -1709,9 +1718,9 @@ class _ConnectedFeatureCard extends StatelessWidget {
                   Flexible(
                     child: Align(
                       alignment: Alignment.topRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
@@ -1723,9 +1732,9 @@ class _ConnectedFeatureCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           softWrap: false,
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: accent,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: accent,
                                 fontWeight: FontWeight.w800,
                               ),
                         ),
@@ -1812,7 +1821,7 @@ class _CommunityHeroStat extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w800,
             ),
