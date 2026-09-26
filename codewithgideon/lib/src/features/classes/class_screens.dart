@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/state/app_providers.dart';
@@ -110,14 +109,14 @@ class ClassListScreen extends ConsumerWidget {
                             runSpacing: 10,
                             children: [
                               _OverviewStatChip(
-                                icon: PhosphorIconsDuotone.videoCamera,
+                                icon: Icons.videocam_outlined,
                                 label: 'Live',
                                 value: '$liveCount',
                                 tint: AppColors.teal,
                                 onDark: true,
                               ),
                               _OverviewStatChip(
-                                icon: PhosphorIconsDuotone.clockCountdown,
+                                icon: Icons.timelapse_outlined,
                                 label: 'Upcoming',
                                 value:
                                     '${allSessions.where((item) => item.startsAt.isAfter(now)).length}',
@@ -125,7 +124,7 @@ class ClassListScreen extends ConsumerWidget {
                                 onDark: true,
                               ),
                               _OverviewStatChip(
-                                icon: PhosphorIconsDuotone.playCircle,
+                                icon: Icons.play_circle_outline_rounded,
                                 label: 'Recordings',
                                 value: '$recordingCount',
                                 tint: AppColors.orangeLight,
@@ -327,12 +326,12 @@ class ClassDetailsScreen extends ConsumerWidget {
                       _ClassMeta(
                         label: 'Status',
                         value: _accessStatusText(session),
-                        icon: PhosphorIconsDuotone.clockCountdown,
+                        icon: Icons.timelapse_outlined,
                       ),
                       _ClassMeta(
                         label: 'Schedule',
                         value: resolveSessionStatus(session).scheduleLabel,
-                        icon: PhosphorIconsDuotone.calendarDots,
+                        icon: Icons.calendar_month_outlined,
                       ),
                       _ClassMeta(
                         label: 'Access',
@@ -485,19 +484,19 @@ class _ClassListCard extends StatelessWidget {
                       _ClassBadge(
                         label: 'Week ${session.week}',
                         tint: AppColors.deepBlue,
-                        icon: PhosphorIconsFill.bookOpenText,
+                        icon: Icons.menu_book_rounded,
                       ),
                       if (session.hasJoinUrl)
                         _ClassBadge(
                           label: 'Live access',
                           tint: AppColors.teal,
-                          icon: PhosphorIconsFill.videoCamera,
+                          icon: Icons.videocam_rounded,
                         ),
                       if (recordingReady)
                         _ClassBadge(
                           label: 'Recording ready',
                           tint: AppColors.orange,
-                          icon: PhosphorIconsFill.playCircle,
+                          icon: Icons.play_circle_rounded,
                         ),
                     ],
                   ),
@@ -538,13 +537,13 @@ class _ClassListCard extends StatelessWidget {
                   label: 'Schedule',
                   value: countdown ?? _formatDateTime(session.startsAt),
                   icon: countdown != null
-                      ? PhosphorIconsDuotone.clockCountdown
-                      : PhosphorIconsDuotone.calendarDots,
+                      ? Icons.timelapse_outlined
+                      : Icons.calendar_month_outlined,
                 ),
                 _ClassMeta(
                   label: 'Track',
                   value: session.pathTitle,
-                  icon: PhosphorIconsDuotone.stack,
+                  icon: Icons.layers_outlined,
                 ),
                 _ClassMeta(
                   label: 'Access',
@@ -556,8 +555,8 @@ class _ClassListCard extends StatelessWidget {
                       ? 'Class starts soon'
                       : status.statusLabel,
                   icon: recordingReady
-                      ? PhosphorIconsDuotone.playCircle
-                      : PhosphorIconsDuotone.videoCamera,
+                      ? Icons.play_circle_outline_rounded
+                      : Icons.videocam_outlined,
                 ),
               ],
             ),
@@ -566,10 +565,10 @@ class _ClassListCard extends StatelessWidget {
               children: [
                 Icon(
                   recordingReady
-                      ? PhosphorIconsFill.playCircle
+                      ? Icons.play_circle_rounded
                       : session.isLive(DateTime.now())
-                      ? PhosphorIconsFill.videoCamera
-                      : PhosphorIconsFill.arrowUpRight,
+                      ? Icons.videocam_rounded
+                      : Icons.north_east_rounded,
                   size: 16,
                   color: recordingReady
                       ? AppColors.orange
@@ -768,7 +767,7 @@ class _ClassArtwork extends StatelessWidget {
             child: _ClassBadge(
               label: session.pathTitle,
               tint: AppColors.deepBlue,
-              icon: PhosphorIconsFill.stack,
+              icon: Icons.layers_rounded,
             ),
           ),
           Center(child: Icon(_statusIcon(status), color: tint, size: 42)),
@@ -1158,11 +1157,11 @@ String _accessStatusText(CohortSessionModel session) {
 IconData _accessIcon(CohortSessionModel session) {
   final status = resolveSessionStatus(session);
   return switch (status.actionState) {
-    SessionActionState.watchRecording => PhosphorIconsDuotone.playCircle,
-    SessionActionState.joinLive => PhosphorIconsDuotone.videoCamera,
-    SessionActionState.startsSoon => PhosphorIconsDuotone.clockCountdown,
-    SessionActionState.awaitingRecording => PhosphorIconsDuotone.clockAfternoon,
-    SessionActionState.awaitingJoinLink => PhosphorIconsDuotone.link,
+    SessionActionState.watchRecording => Icons.play_circle_outline_rounded,
+    SessionActionState.joinLive => Icons.videocam_outlined,
+    SessionActionState.startsSoon => Icons.timelapse_outlined,
+    SessionActionState.awaitingRecording => Icons.schedule_outlined,
+    SessionActionState.awaitingJoinLink => Icons.link_rounded,
   };
 }
 
@@ -1180,11 +1179,11 @@ String _primaryActionLabel(CohortSessionModel session) {
 IconData _primaryActionIcon(CohortSessionModel session) {
   final status = resolveSessionStatus(session);
   return switch (status.actionState) {
-    SessionActionState.watchRecording => PhosphorIconsBold.playCircle,
-    SessionActionState.joinLive => PhosphorIconsBold.videoCamera,
-    SessionActionState.startsSoon => PhosphorIconsBold.timer,
-    SessionActionState.awaitingRecording => PhosphorIconsBold.arrowLeft,
-    SessionActionState.awaitingJoinLink => PhosphorIconsBold.arrowLeft,
+    SessionActionState.watchRecording => Icons.play_circle_rounded,
+    SessionActionState.joinLive => Icons.videocam_rounded,
+    SessionActionState.startsSoon => Icons.timer_rounded,
+    SessionActionState.awaitingRecording => Icons.arrow_back_rounded,
+    SessionActionState.awaitingJoinLink => Icons.arrow_back_rounded,
   };
 }
 
@@ -1227,10 +1226,10 @@ Color _statusTone(SessionStatusSnapshot status) {
 
 IconData _statusIcon(SessionStatusSnapshot status) {
   return switch (status.actionState) {
-    SessionActionState.joinLive => PhosphorIconsFill.videoCamera,
-    SessionActionState.startsSoon => PhosphorIconsFill.clockCountdown,
-    SessionActionState.watchRecording => PhosphorIconsFill.playCircle,
-    SessionActionState.awaitingRecording => PhosphorIconsFill.clockAfternoon,
-    SessionActionState.awaitingJoinLink => PhosphorIconsFill.link,
+    SessionActionState.joinLive => Icons.videocam_rounded,
+    SessionActionState.startsSoon => Icons.timelapse_rounded,
+    SessionActionState.watchRecording => Icons.play_circle_rounded,
+    SessionActionState.awaitingRecording => Icons.schedule_rounded,
+    SessionActionState.awaitingJoinLink => Icons.link_rounded,
   };
 }

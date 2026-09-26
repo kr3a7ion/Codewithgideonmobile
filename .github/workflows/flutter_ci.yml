@@ -8,8 +8,15 @@ on:
   pull_request:
 
 jobs:
-  analyze-and-test:
+  analyze-test-build:
+    name: Flutter ${{ matrix.flutter }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.38.7 is the version in .metadata; "any" is the latest stable
+        # release, so an SDK upgrade that breaks the app shows up here first.
+        flutter: ['3.38.7', 'any']
     defaults:
       run:
         working-directory: codewithgideon
@@ -17,15 +24,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pinned to the Flutter version the project uses (.metadata: 3.38.7).
-      # phosphor_flutter 2.1.0 extends IconData, which became a final class
-      # in Flutter 3.44, so newer Flutter versions can't compile the app until
-      # that package is replaced.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: 3.38.7
+          flutter-version: ${{ matrix.flutter }}
           cache: true
+
+      - name: Flutter version
+        run: flutter --version
 
       - name: Install dependencies
         run: flutter pub get
@@ -46,7 +57,7 @@ jobs:
           cat analyze.txt
           if [ "$code" -ne 0 ]; then
             issues=$(grep ' • ' analyze.txt | head -120 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
-            echo "::error title=flutter analyze::${issues}"
+            echo "::error title=flutter analyze (${{ matrix.flutter }})::${issues}"
           fi
           exit $code
 
@@ -58,6 +69,19 @@ jobs:
           cat test.txt
           if [ "$code" -ne 0 ]; then
             details=$(grep -E -A12 'EXCEPTION CAUGHT|\[E\]|Expected:|Error:' test.txt | head -80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
-            echo "::error title=flutter test::${details}"
+            echo "::error title=flutter test (${{ matrix.flutter }})::${details}"
+          fi
+          exit $code
+
+      # Compiles the whole app, not just the parts the tests import.
+      - name: Build debug APK
+        run: |
+          set +e
+          flutter build apk --debug > build.txt 2>&1
+          code=$?
+          cat build.txt
+          if [ "$code" -ne 0 ]; then
+            details=$(grep -E -B2 -A6 'Error|error:|FAILURE|What went wrong' build.txt | head -80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=flutter build apk (${{ matrix.flutter }})::${details}"
           fi
           exit $code

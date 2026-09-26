@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/legacy.dart' show StateProvider;
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -300,7 +299,7 @@ class _DashboardHeader extends ConsumerWidget {
         ),
         const Gap(12),
         _IconBubble(
-          icon: PhosphorIconsRegular.bell,
+          icon: Icons.notifications_none_rounded,
           badgeCount: unreadCountAsync.maybeWhen(
             data: (count) => count,
             orElse: () => 0,
@@ -430,14 +429,14 @@ class _DashboardHero extends StatelessWidget {
                   : 'View All Classes',
               leading: Icon(
                 snapshot.hasAnyPending
-                    ? PhosphorIconsFill.lockers
+                    ? Icons.lock_rounded
                     : _shouldWatchRecording(heroSession)
-                    ? PhosphorIconsFill.playCircle
+                    ? Icons.play_circle_rounded
                     : _isUpcomingJoinableSession(heroSession)
-                    ? PhosphorIconsFill.timer
+                    ? Icons.timer_rounded
                     : _shouldJoinLiveClass(heroSession)
-                    ? PhosphorIconsFill.playCircle
-                    : PhosphorIconsFill.bookOpenText,
+                    ? Icons.play_circle_rounded
+                    : Icons.menu_book_rounded,
                 color: Colors.white,
                 size: 20,
               ),
@@ -614,8 +613,8 @@ class _HeroIllustration extends StatelessWidget {
             right: 14,
             child: Icon(
               isPending
-                  ? PhosphorIconsFill.lockers
-                  : PhosphorIconsFill.bookOpenText,
+                  ? Icons.lock_rounded
+                  : Icons.menu_book_rounded,
               size: 34,
               color: isDark ? AppColors.tealLight : AppColors.deepBlue,
             ),
@@ -646,7 +645,7 @@ class _HeroIllustration extends StatelessWidget {
               ),
               alignment: Alignment.center,
               child: Icon(
-                PhosphorIconsFill.student,
+                Icons.school_rounded,
                 color: Colors.white,
                 size: 28,
               ),
@@ -668,7 +667,7 @@ class _HeroIllustration extends StatelessWidget {
                 ),
                 alignment: Alignment.center,
                 child: const Icon(
-                  PhosphorIconsFill.bookOpenText,
+                  Icons.menu_book_rounded,
                   color: Colors.white,
                   size: 20,
                 ),
@@ -833,7 +832,7 @@ class _DashboardSyncBanner extends StatelessWidget {
             child: isSyncing
                 ? const CircularProgressIndicator(strokeWidth: 2.1)
                 : Icon(
-                    PhosphorIconsFill.warningCircle,
+                    Icons.error_rounded,
                     color: accent,
                     size: 18,
                   ),
@@ -1413,8 +1412,8 @@ class _SessionCardArtwork extends StatelessWidget {
           Center(
             child: Icon(
               session.hasJoinUrl
-                  ? PhosphorIconsFill.videoCamera
-                  : PhosphorIconsFill.graduationCap,
+                  ? Icons.videocam_rounded
+                  : Icons.school_rounded,
               size: 44,
               color: isDark ? AppColors.tealLight : AppColors.deepBlue,
             ),
@@ -1739,7 +1738,7 @@ class _HeroTimingPill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            PhosphorIconsFill.timer,
+            Icons.timer_rounded,
             size: 12,
             color: isDark ? AppColors.tealLight : AppColors.deepBlue,
           ),

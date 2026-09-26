@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../theme/app_theme.dart';
 
@@ -18,10 +17,10 @@ class PremiumBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const items = [
-      _NavItem(PhosphorIconsFill.house),
-      _NavItem(PhosphorIconsFill.bookOpenText),
-      _NavItem(PhosphorIconsFill.usersThree),
-      _NavItem(PhosphorIconsFill.userCircle),
+      _NavItem(Icons.home_rounded),
+      _NavItem(Icons.menu_book_rounded),
+      _NavItem(Icons.groups_rounded),
+      _NavItem(Icons.account_circle_rounded),
     ];
 
     return SafeArea(
