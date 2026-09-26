@@ -17,9 +17,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned to the Flutter version the project uses (.metadata: 3.38.7).
+      # phosphor_flutter 2.1.0 extends IconData, which became a final class
+      # in Flutter 3.44, so newer Flutter versions can't compile the app until
+      # that package is replaced.
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: 3.38.7
           cache: true
 
       - name: Install dependencies
