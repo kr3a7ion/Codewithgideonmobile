@@ -38,7 +38,7 @@ class ResourceRepository {
                 _matchesScope(resource.courseId, effectiveCourseId),
           )
           .toList()
-        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        ..sort((a, b) => _sortTime(b).compareTo(_sortTime(a)));
     });
   }
 
@@ -80,6 +80,9 @@ class ResourceRepository {
     );
   }
 }
+
+DateTime _sortTime(CourseResource resource) =>
+    resource.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
 
 bool _matchesScope(String scopeValue, String expected) {
   final normalizedScope = scopeValue.trim();

@@ -145,7 +145,7 @@ class AuthRepository {
       }
 
       await markOnboardingSeen();
-      return _buildSession(user);
+      return await _buildSession(user);
     } on FirebaseAuthException catch (error) {
       if (error.code == 'account-exists-with-different-credential') {
         final email = error.email?.trim();
