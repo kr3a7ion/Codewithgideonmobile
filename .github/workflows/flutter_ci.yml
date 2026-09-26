@@ -31,8 +31,19 @@ jobs:
         continue-on-error: true
         run: dart format --output=none --set-exit-if-changed lib test
 
+      # Also posts the issue list as a single annotation, so it is visible
+      # on the PR's Checks tab without opening the raw log.
       - name: Analyze
-        run: flutter analyze
+        run: |
+          set +e
+          flutter analyze > analyze.txt 2>&1
+          code=$?
+          cat analyze.txt
+          if [ "$code" -ne 0 ]; then
+            issues=$(grep ' • ' analyze.txt | head -120 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=flutter analyze::${issues}"
+          fi
+          exit $code
 
       - name: Test
         run: flutter test
