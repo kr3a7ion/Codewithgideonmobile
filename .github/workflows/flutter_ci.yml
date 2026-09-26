@@ -46,4 +46,13 @@ jobs:
           exit $code
 
       - name: Test
-        run: flutter test
+        run: |
+          set +e
+          flutter test --reporter expanded > test.txt 2>&1
+          code=$?
+          cat test.txt
+          if [ "$code" -ne 0 ]; then
+            details=$(grep -E -A12 'EXCEPTION CAUGHT|\[E\]|Expected:|Error:' test.txt | head -80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=flutter test::${details}"
+          fi
+          exit $code
