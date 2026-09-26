@@ -1,5 +1,7 @@
 name: Flutter CI
 
+# GitHub only reads workflows from the repository root, so this file lives
+# here and points at the Flutter project in ./codewithgideon.
 on:
   push:
     branches: ['**']
@@ -8,6 +10,9 @@ on:
 jobs:
   analyze-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: codewithgideon
 
     steps:
       - uses: actions/checkout@v4

@@ -20,9 +20,11 @@ class ResourceRepository {
     String? resolvedCourseId,
   }) {
     return _apiClient.simulateRequest(() async {
+      // Only published resources: the security rules reject a query that
+      // could return drafts. Sorted on the device (no composite index).
       final snapshot = await _firebaseFirestore
           .collection('resources')
-          .orderBy('updatedAt', descending: true)
+          .where('isPublished', isEqualTo: true)
           .get();
 
       final effectiveCourseId = (resolvedCourseId ?? profile.courseId).trim();
@@ -35,8 +37,9 @@ class ResourceRepository {
                 _matchesScope(resource.pathId, profile.pathId) &&
                 _matchesScope(resource.courseId, effectiveCourseId),
           )
-          .toList();
-    }, latency: const Duration(milliseconds: 400));
+          .toList()
+        ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    });
   }
 
   List<CourseResource> resourcesForSession({

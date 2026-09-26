@@ -458,17 +458,16 @@ class _PaymentSummaryCard extends StatelessWidget {
             label: 'Base price',
             value: _formatNaira(pricing.basePrice),
           ),
-          _SummaryRow(
-            label: 'Paystack fee',
-            value: _formatNaira(pricing.totalFee - pricing.yourFeeShare),
-          ),
-
           const Divider(height: 28),
           _SummaryRow(
-            label: 'Total Charge',
+            label: 'Course total',
             value: _formatNaira(pricing.totalPrice),
             emphasize: true,
-          
+          ),
+          const Gap(8),
+          Text(
+            'Paystack may add a small gateway fee at checkout.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),

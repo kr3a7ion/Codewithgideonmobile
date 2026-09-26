@@ -45,24 +45,24 @@ class DashboardRepository {
       final activeCohort = await _cohortRepository.getActiveCohortForPath(
         profile.pathId,
       );
-      final allCohortSessions = await _cohortRepository.getSessionsForCohort(
-        profile.cohortKey ?? activeCohort.cohortKey,
-      );
-      final libraryResources = await _resourceRepository
-          .getPublishedResourcesForStudent(
-            profile: profile,
-            resolvedCourseId: course.id,
-          );
-
-      final unlockedSessions =
-          profile.isPending || profile.hasPendingInitialPayment
-                ? <CohortSessionModel>[]
-                : allCohortSessions
-                      .where((session) => session.isPublished)
-                      .where((session) => session.pathId == profile.pathId)
-                      .where((session) => session.week <= profile.weeksToCommit)
-                      .toList()
-            ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      // Students who haven't paid yet see no classes or resources, so don't
+      // query them at all: the security rules only allow these reads for
+      // enrolled students, and a rejected query would fail the whole
+      // dashboard.
+      final isLocked = profile.isPending || profile.hasPendingInitialPayment;
+      final unlockedSessions = isLocked
+          ? <CohortSessionModel>[]
+          : await _cohortRepository.getUnlockedSessions(
+              cohortKey: profile.cohortKey ?? activeCohort.cohortKey,
+              pathId: profile.pathId,
+              paidWeeks: profile.weeksToCommit,
+            );
+      final libraryResources = isLocked
+          ? <CourseResource>[]
+          : await _resourceRepository.getPublishedResourcesForStudent(
+              profile: profile,
+              resolvedCourseId: course.id,
+            );
 
       // Mirror the source-of-truth session list into a recordings shelf when
       // Firebase has already attached a YouTube or hosted recording URL.
@@ -102,7 +102,7 @@ class DashboardRepository {
         recordedLessons: recordedLessons,
         libraryResources: libraryResources,
       );
-    }, latency: const Duration(milliseconds: 550));
+    });
   }
 }
 

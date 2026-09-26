@@ -41,14 +41,16 @@ class MentorRequestRepository {
   CollectionReference<Map<String, dynamic>> get _threadsCollection =>
       _db.collection('mentorThreads');
 
+  /// One mentor conversation per student, shared with the web app and the
+  /// `sendMentorRequest` Cloud Function (`mentor_<uid>`). Each message still
+  /// records which session it was about. [sessionId] is kept for callers.
   String buildThreadId({
     required String studentUid,
     required String sessionId,
   }) {
     final sanitize = RegExp(r'[^A-Za-z0-9._-]+');
     final cleanUid = studentUid.trim().replaceAll(sanitize, '_');
-    final cleanSessionId = sessionId.trim().replaceAll(sanitize, '_');
-    return 'mentor_${cleanUid}_$cleanSessionId';
+    return 'mentor_$cleanUid';
   }
 
   String _cacheKey(String studentUid, String? sessionId) {
