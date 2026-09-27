@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
@@ -272,7 +271,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
               child: Row(
                 children: [
                   PremiumIconButton(
-                    icon: PhosphorIconsBold.arrowLeft,
+                    icon: Icons.arrow_back_rounded,
                     onTap: () => context.pop(),
                     isDark: isDark,
                   ),
@@ -380,13 +379,13 @@ class _RecordedPlayerLayout extends StatelessWidget {
                     Row(
                       children: [
                         _PlayerPill(
-                          icon: PhosphorIconsFill.shieldCheck,
+                          icon: Icons.verified_user_rounded,
                           label: 'In-app playback',
                           color: AppColors.teal,
                         ),
                         const Gap(10),
                         _PlayerPill(
-                          icon: PhosphorIconsFill.calendarDots,
+                          icon: Icons.calendar_month_rounded,
                           label: status.scheduleLabel,
                           color: AppColors.deepBlueLight,
                         ),

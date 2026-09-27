@@ -62,7 +62,7 @@ lib/src/
 | Notifications | flutter_local_notifications |
 | Connectivity | connectivity_plus |
 | Local storage | shared_preferences |
-| UI | google_fonts, flutter_svg, phosphor_flutter, flutter_animate |
+| UI | google_fonts, flutter_svg, Material Icons (rounded), flutter_animate |
 
 ---
 
