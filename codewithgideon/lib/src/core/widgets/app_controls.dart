@@ -57,7 +57,9 @@ class AppButton extends StatelessWidget {
         Flexible(
           child: Text(
             label,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.w700, color: foreground),
           ),
         ),
@@ -175,6 +177,7 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -201,7 +204,12 @@ class AppTextField extends StatelessWidget {
             hintText: hint,
             prefixIcon: prefixIcon == null
                 ? null
-                : Icon(prefixIcon, color: AppColors.mutedForeground),
+                : Icon(
+                    prefixIcon,
+                    color: isDark
+                        ? AppColors.darkMutedForeground
+                        : AppColors.mutedForeground,
+                  ),
             suffixIcon: suffix,
           ),
         ),
@@ -608,7 +616,7 @@ class BrandWordmark extends StatelessWidget {
           fontSize: fontSize,
           color: color,
           fontWeight: FontWeight.w800,
-          letterSpacing: -0.6,
+          letterSpacing: 0,
         ),
       ),
     );
@@ -690,9 +698,10 @@ class PremiumPageHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
 
             children: [
-              const Gap(10),
               Text(
                 title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   color: titleColor,
                   fontWeight: FontWeight.w700,
@@ -718,12 +727,18 @@ class PremiumPageHeader extends StatelessWidget {
 }
 
 void showAppSnackBar(BuildContext context, String message) {
+  final media = MediaQuery.maybeOf(context);
+  final bottomInset = media?.viewInsets.bottom ?? 0;
+  final bottomPadding = media?.viewPadding.bottom ?? 0;
+  final bottomMargin = bottomInset > 0 ? bottomInset + 18 : bottomPadding + 88;
+
   ScaffoldMessenger.of(context)
     ..clearSnackBars()
     ..showSnackBar(
       SnackBar(
         content: Text(message),
         behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.fromLTRB(20, 0, 20, bottomMargin),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );

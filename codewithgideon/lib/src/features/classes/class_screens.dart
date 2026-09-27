@@ -182,7 +182,7 @@ class ClassListScreen extends ConsumerWidget {
                                 ? 'No classes available yet'
                                 : 'No classes match this view',
                             message: allSessions.isEmpty
-                                ? 'Your dashboard is live, but no published sessions have been unlocked in Firestore yet.'
+                                ? 'Your dashboard is live. Classes will appear here once your schedule is published and unlocked.'
                                 : 'Try another search or switch between upcoming, live, and completed.',
                             icon: Icons.event_busy_outlined,
                             action: AppButton(
@@ -273,7 +273,7 @@ class ClassDetailsScreen extends ConsumerWidget {
             body: SafeArea(
               top: false,
               child: AppEmptyState(
-                title: 'Class not found',
+                title: 'Class unavailable',
                 message:
                     'That session is no longer available in your unlocked class list.',
                 icon: Icons.menu_book_outlined,
@@ -383,8 +383,8 @@ class ClassDetailsScreen extends ConsumerWidget {
                       const Gap(10),
                       Text(
                         sessionResources.isEmpty
-                            ? 'No class-specific files have been linked from the admin dashboard yet.'
-                            : 'These resources were attached to this class from the admin dashboard.',
+                            ? 'No class-specific files have been added for this lesson yet.'
+                            : 'These resources were attached to this class for easier study.',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: _muted(context),
                           height: 1.55,
@@ -971,9 +971,7 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: isDark
-              ? Color.lerp(tone, Colors.white, 0.18) ?? tone
-              : tone,
+          color: isDark ? Color.lerp(tone, Colors.white, 0.18) ?? tone : tone,
           fontWeight: FontWeight.w700,
         ),
       ),

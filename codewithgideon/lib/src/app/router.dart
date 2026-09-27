@@ -58,14 +58,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/settings',
       ].any(location.startsWith);
       final isPaymentRoute = location.startsWith('/payment');
-      final isPendingShellRoute = const [
-        '/dashboard',
-        '/classes',
-        '/community',
-        '/profile',
-        '/settings',
-        '/profile/edit',
-      ].any(location.startsWith);
+      final isTopUpPaymentRoute =
+          isPaymentRoute && state.uri.queryParameters['mode'] == 'topup';
       final isAuthFlow = const [
         '/welcome',
         '/login',
@@ -115,33 +109,39 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
       if (authState.enrollmentStatus == EnrollmentStatus.notRegistered &&
           location != '/continue-registration' &&
-          !isLegalRoute &&
-          !isPaymentRoute) {
+          !isLegalRoute) {
         return '/continue-registration';
+      }
+
+      if (authState.enrollmentStatus == EnrollmentStatus.pending) {
+        if (isTopUpPaymentRoute) return _initialPaymentLocation();
+        if (isPaymentRoute ||
+            location == '/continue-registration' ||
+            isLegalRoute ||
+            _pendingEnrollmentAllowedLocation(location)) {
+          return null;
+        }
+        return '/dashboard';
       }
 
       if (isAuthFlow && location != '/continue-registration') {
         if (authState.enrollmentStatus == EnrollmentStatus.notRegistered) {
           return '/continue-registration';
         }
-        if (authState.enrollmentStatus == EnrollmentStatus.enrolled ||
-            authState.enrollmentStatus == EnrollmentStatus.pending) {
+        if (authState.enrollmentStatus == EnrollmentStatus.enrolled) {
           return '/dashboard';
         }
-        return '/enrollment';
+        return '/dashboard';
       }
 
       if (authState.enrollmentStatus != EnrollmentStatus.enrolled &&
           isProtected &&
-          !isPaymentRoute &&
-          !(authState.enrollmentStatus == EnrollmentStatus.pending &&
-              isPendingShellRoute)) {
+          !isPaymentRoute) {
         return '/enrollment';
       }
 
       if (location == '/enrollment' &&
-          (authState.enrollmentStatus == EnrollmentStatus.enrolled ||
-              authState.enrollmentStatus == EnrollmentStatus.pending)) {
+          authState.enrollmentStatus == EnrollmentStatus.enrolled) {
         return '/dashboard';
       }
 
@@ -314,9 +314,19 @@ String _signedInHome(AuthState authState) {
   if (authState.enrollmentStatus == EnrollmentStatus.notRegistered) {
     return '/continue-registration';
   }
-  if (authState.enrollmentStatus == EnrollmentStatus.enrolled ||
-      authState.enrollmentStatus == EnrollmentStatus.pending) {
+  if (authState.enrollmentStatus == EnrollmentStatus.pending) {
+    return '/dashboard';
+  }
+  if (authState.enrollmentStatus == EnrollmentStatus.enrolled) {
     return '/dashboard';
   }
   return '/enrollment';
+}
+
+String _initialPaymentLocation() {
+  return '/payment?mode=initial&returnTo=%2Fcontinue-registration';
+}
+
+bool _pendingEnrollmentAllowedLocation(String location) {
+  return location == '/dashboard' || location == '/profile';
 }

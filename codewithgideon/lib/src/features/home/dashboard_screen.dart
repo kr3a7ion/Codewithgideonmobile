@@ -18,9 +18,8 @@ import '../student/models/pending_payment_model.dart';
 import 'models/student_dashboard_snapshot.dart';
 import 'state/dashboard_provider.dart';
 
-final _dashboardSnapshotCacheProvider = StateProvider<StudentDashboardSnapshot?>(
-  (ref) => null,
-);
+final _dashboardSnapshotCacheProvider =
+    StateProvider<StudentDashboardSnapshot?>((ref) => null);
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -28,14 +27,14 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboardState = ref.watch(dashboardSnapshotProvider);
-    ref.listen<AsyncValue<StudentDashboardSnapshot>>(dashboardSnapshotProvider, (
-      _,
-      next,
-    ) {
-      next.whenData((snapshot) {
-        ref.read(_dashboardSnapshotCacheProvider.notifier).state = snapshot;
-      });
-    });
+    ref.listen<AsyncValue<StudentDashboardSnapshot>>(
+      dashboardSnapshotProvider,
+      (_, next) {
+        next.whenData((snapshot) {
+          ref.read(_dashboardSnapshotCacheProvider.notifier).state = snapshot;
+        });
+      },
+    );
     final cachedSnapshot = ref.watch(_dashboardSnapshotCacheProvider);
     final showSyncing = dashboardState.isLoading && cachedSnapshot != null;
     final syncError = dashboardState.asError?.error;
@@ -69,9 +68,8 @@ class DashboardScreen extends ConsumerWidget {
           ),
         ),
       ),
-      data: (dashboard) => DoubleBackToExitScope(
-        child: _DashboardContent(snapshot: dashboard),
-      ),
+      data: (dashboard) =>
+          DoubleBackToExitScope(child: _DashboardContent(snapshot: dashboard)),
     );
   }
 }
@@ -800,10 +798,7 @@ class _CourseRoadmap extends StatelessWidget {
 }
 
 class _DashboardSyncBanner extends StatelessWidget {
-  const _DashboardSyncBanner({
-    required this.isSyncing,
-    required this.message,
-  });
+  const _DashboardSyncBanner({required this.isSyncing, required this.message});
 
   final bool isSyncing;
   final String? message;
@@ -843,9 +838,7 @@ class _DashboardSyncBanner extends StatelessWidget {
               message ??
                   'Refreshing your dashboard sections in the background. Your last synced view stays available while new data arrives.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: isDark
-                    ? AppColors.darkForeground
-                    : AppColors.foreground,
+                color: isDark ? AppColors.darkForeground : AppColors.foreground,
                 fontWeight: FontWeight.w600,
                 height: 1.45,
               ),
@@ -2057,7 +2050,7 @@ class _RoadmapStep extends StatelessWidget {
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: item.tint,
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 0.3,
+                    letterSpacing: 0,
                   ),
                 ),
                 const Gap(4),

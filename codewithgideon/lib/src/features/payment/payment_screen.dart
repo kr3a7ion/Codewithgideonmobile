@@ -53,6 +53,8 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomPadding = MediaQuery.viewPaddingOf(context).bottom + 96;
+
     return AppScreen(
       body: Stack(
         children: [
@@ -121,7 +123,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    padding: const EdgeInsets.fromLTRB(22, 30, 22, 40),
+                    padding: EdgeInsets.fromLTRB(22, 30, 22, bottomPadding),
                     children: [
                       PremiumPageHeader(
                         leading: PremiumIconButton(
@@ -151,7 +153,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                                   ? 'You already have ${checkout.committedWeeks} week(s). Choose how many more weeks to unlock now.'
                                   : 'Choose the number of weeks you want to unlock for this registration.',
                               style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: AppColors.mutedForeground),
+                                  ?.copyWith(color: _muted(context)),
                             ),
                             const Gap(18),
                             AppTextField(
@@ -187,7 +189,11 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                               checkout.kind == PaymentFlowKind.topUp
                                   ? 'Available range: 1 to ${checkout.maxAllowedWeeks} week(s)'
                                   : 'Available range: 1 to ${checkout.totalProgramWeeks} week(s)',
-                              style: Theme.of(context).textTheme.bodySmall,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: _muted(context),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                             ),
                             if (!isWeeksValid) ...[
                               const Gap(10),
@@ -283,10 +289,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     }
 
     final paymentRepository = ref.read(paymentRepositoryProvider);
-    final reference =
-        checkout.matchingPendingPayment?.reference.isNotEmpty == true
-        ? checkout.matchingPendingPayment!.reference
-        : paymentRepository.generateReference();
+    final reference = paymentRepository.generateReference();
 
     final metadata = <String, Object?>{
       'uid': checkout.profile.uid,
@@ -322,6 +325,24 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
 
       if (!mounted) return;
 
+      try {
+        await paymentRepository.setPendingPayment(
+          uid: checkout.profile.uid,
+          kind: checkout.kind,
+          weeks: pricing.weeks,
+          amount: pricing.totalPrice,
+          reference: initialized.reference,
+        );
+        ref.invalidate(dashboardSnapshotProvider);
+      } catch (_) {
+        if (!mounted) return;
+        showAppSnackBar(
+          context,
+          'Checkout is ready. Complete it now so your access can update immediately.',
+        );
+      }
+
+      if (!mounted) return;
       await FlutterPaystackPlus.openPaystackPopup(
         customerEmail: session.email,
         amount: '${pricing.totalPriceKobo}',
@@ -357,7 +378,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             context.go('/dashboard');
           } catch (error) {
             if (!mounted) return;
-            showAppSnackBar(context, '$error'.replaceFirst('Bad state: ', ''));
+            showAppSnackBar(context, _prettyPaymentError(error));
           } finally {
             if (mounted) {
               setState(() => _processing = false);
@@ -365,6 +386,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           }
         },
       );
+      if (mounted && !_paymentCompleted) {
+        setState(() => _processing = false);
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() => _processing = false);
@@ -381,8 +405,9 @@ class _PaymentHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 360;
     return Container(
-      padding: const EdgeInsets.all(22),
+      padding: EdgeInsets.all(compact ? 20 : 22),
       decoration: BoxDecoration(
         gradient: checkout.kind == PaymentFlowKind.topUp
             ? const LinearGradient(
@@ -408,8 +433,10 @@ class _PaymentHero extends StatelessWidget {
           Text(
             _formatNaira(pricing.totalPrice),
             style: Theme.of(context).textTheme.displaySmall?.copyWith(
+              fontSize: compact ? 25 : null,
               color: Colors.white,
               fontWeight: FontWeight.w800,
+              height: 1.1,
             ),
           ),
           const Gap(8),
@@ -443,6 +470,7 @@ class _PaymentSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -463,11 +491,7 @@ class _PaymentSummaryCard extends StatelessWidget {
             label: 'Course total',
             value: _formatNaira(pricing.totalPrice),
             emphasize: true,
-          ),
-          const Gap(8),
-          Text(
-            'Paystack may add a small gateway fee at checkout.',
-            style: Theme.of(context).textTheme.bodySmall,
+          
           ),
         ],
       ),
@@ -492,6 +516,12 @@ class _WeekStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final chipColor = isDark
+        ? AppColors.tealLight.withValues(alpha: 0.14)
+        : AppColors.deepBlue.withValues(alpha: 0.06);
+    final chipText = isDark ? AppColors.darkForeground : AppColors.deepBlueDark;
+
     return Row(
       children: [
         _WeekStepButton(
@@ -503,14 +533,19 @@ class _WeekStepper extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.deepBlue.withValues(alpha: 0.06),
+            color: chipColor,
             borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark
+                  ? AppColors.tealLight.withValues(alpha: 0.16)
+                  : Colors.transparent,
+            ),
           ),
           child: Text(
             '$value week${value == 1 ? '' : 's'}',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
-              color: AppColors.deepBlueDark,
+              color: chipText,
             ),
           ),
         ),
@@ -538,6 +573,7 @@ class _WeekStepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(16),
@@ -547,14 +583,18 @@ class _WeekStepButton extends StatelessWidget {
         height: 44,
         decoration: BoxDecoration(
           color: enabled
-              ? AppColors.deepBlue.withValues(alpha: 0.08)
-              : AppColors.muted,
+              ? (isDark
+                    ? AppColors.tealLight.withValues(alpha: 0.14)
+                    : AppColors.deepBlue.withValues(alpha: 0.08))
+              : (isDark ? AppColors.darkMuted : AppColors.muted),
           borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.center,
         child: Icon(
           icon,
-          color: enabled ? AppColors.deepBlueDark : AppColors.mutedForeground,
+          color: enabled
+              ? (isDark ? AppColors.tealLight : AppColors.deepBlueDark)
+              : _muted(context),
         ),
       ),
     );
@@ -591,10 +631,13 @@ class _PendingPaymentCard extends StatelessWidget {
                 ),
                 const Gap(6),
                 Text(
-                  'Reference ${pending.reference} for ${pending.weeks} week(s). Continue below when you are ready.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: AppColors.foreground),
+                  'We saved ${pending.weeks} week(s) for this checkout. Continue below and we will open a fresh secure Paystack window.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? AppColors.darkForeground
+                        : AppColors.foreground,
+                    height: 1.5,
+                  ),
                 ),
               ],
             ),
@@ -704,6 +747,7 @@ class _SummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final style = emphasize
         ? Theme.of(
             context,
@@ -719,12 +763,24 @@ class _SummaryRow extends StatelessWidget {
               label,
               style: style?.copyWith(
                 color: emphasize
-                    ? AppColors.deepBlueDark
-                    : AppColors.mutedForeground,
+                    ? (isDark
+                          ? AppColors.darkForeground
+                          : AppColors.deepBlueDark)
+                    : _muted(context),
               ),
             ),
           ),
-          Text(value, style: style),
+          const Gap(12),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+              style: style?.copyWith(
+                color: isDark ? AppColors.darkForeground : AppColors.foreground,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -776,12 +832,32 @@ String _formatNaira(int amount) {
 
 String _prettyPaymentError(Object error) {
   final raw = '$error'.replaceFirst('Bad state: ', '').trim();
+  if (raw.contains('<html') ||
+      raw.contains('Unexpected character') ||
+      raw.contains('FormatException') ||
+      raw.contains('valid payment data') ||
+      raw.contains('Paystack secret') ||
+      raw.contains('invalid initialization response') ||
+      raw.contains('checkout URL was missing')) {
+    return 'The payment service returned an unexpected response. Please try again. If it continues, contact support.';
+  }
   if (raw.contains('XMLHttpRequest error') ||
       raw.contains('ClientException') ||
       raw.contains('SocketException')) {
     return 'We could not reach the payment service. Check your connection and try again.';
   }
-  return raw;
+  if (raw.contains('Could not initialize payment') ||
+      raw.contains('We could not confirm your payment') ||
+      raw.contains('Payment could not be started')) {
+    return raw;
+  }
+  return 'Payment could not be started. Please try again.';
+}
+
+Color _muted(BuildContext context) {
+  return Theme.of(context).brightness == Brightness.dark
+      ? AppColors.darkMutedForeground
+      : AppColors.mutedForeground;
 }
 
 class _PaymentStageCopy {

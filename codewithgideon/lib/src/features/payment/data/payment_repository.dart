@@ -51,8 +51,6 @@ class PaymentRepository {
     required PaymentFlowKind kind,
     required int weeks,
     required int amount,
-    required int baseAmount,
-    required int weeklyRate,
     required String reference,
   }) {
     return _firebaseFirestore.collection('users').doc(uid).set({
@@ -61,12 +59,10 @@ class PaymentRepository {
         'status': 'Pending',
         'weeks': weeks,
         'amount': amount,
-        'baseAmount': baseAmount,
-        'weeklyRate': weeklyRate,
         'reference': reference,
-        'createdAt': FieldValue.serverTimestamp(),
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
       },
-      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
     }, SetOptions(merge: true));
   }
 
@@ -104,7 +100,11 @@ class PaymentRepository {
       }),
     );
 
-    final json = _decodeJson(response.body);
+    final json = _decodeJson(
+      response,
+      fallback:
+          'The payment checkout service is not returning valid payment data right now.',
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
         describeHttpError(json, 'Could not initialize payment.'),
@@ -155,16 +155,7 @@ class PaymentRepository {
       }),
     );
 
-    final json = _decodeJson(response.body);
-    if (json['needsReview'] == true) {
-      throw StateError(
-        describeHttpError(
-          json,
-          'Your payment was received and is being reviewed. '
-          'Your classes will unlock once it is confirmed.',
-        ),
-      );
-    }
+    final json = _decodeJson(response.body as http.Response, fallback: '');
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
         json['ok'] != true) {
@@ -208,11 +199,32 @@ class PaymentRepository {
     return 'CWG_${DateTime.now().millisecondsSinceEpoch.toRadixString(36).toUpperCase()}_$random';
   }
 
-  Map<String, dynamic> _decodeJson(String raw) {
-    if (raw.trim().isEmpty) return <String, dynamic>{};
-    final decoded = jsonDecode(raw);
-    if (decoded is Map<String, dynamic>) return decoded;
-    throw const FormatException('Invalid JSON response');
+  Map<String, dynamic> _decodeJson(
+    http.Response response, {
+    required String fallback,
+  }) {
+    final raw = response.body.trim();
+    if (raw.isEmpty) return <String, dynamic>{};
+
+    final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+    final looksLikeHtml =
+        raw.startsWith('<') ||
+        raw.toLowerCase().contains('<html') ||
+        contentType.contains('text/html');
+    if (looksLikeHtml) {
+      throw StateError(
+        '$fallback Please try again. If it continues, contact support so we can check the Paystack endpoint.',
+      );
+    }
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } on FormatException {
+      throw StateError(fallback);
+    }
+
+    throw StateError(fallback);
   }
 
   static String describeHttpError(Map<String, dynamic> json, String fallback) {
