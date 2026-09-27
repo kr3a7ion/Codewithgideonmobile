@@ -41,7 +41,10 @@ class MentorRequestRepository {
   CollectionReference<Map<String, dynamic>> get _threadsCollection =>
       _db.collection('mentorThreads');
 
-  String buildThreadId({required String studentUid}) {
+  String buildThreadId({
+    required String studentUid,
+    required String sessionId,
+  }) {
     final sanitize = RegExp(r'[^A-Za-z0-9._-]+');
     final cleanUid = studentUid.trim().replaceAll(sanitize, '_');
     return 'mentor_$cleanUid';
@@ -270,7 +273,7 @@ class MentorConversationNotifier
     final sessionId = (query.sessionId ?? '').trim();
     final conversationId = explicitConversationId?.isNotEmpty == true
         ? explicitConversationId!
-        : _repository.buildThreadId(studentUid: session.uid);
+        : _repository.buildThreadId(studentUid: session.uid, sessionId: '');
     _bindConversationTimeline(
       studentUid: session.uid,
       conversationId: conversationId,

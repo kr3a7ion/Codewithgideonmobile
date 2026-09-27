@@ -95,7 +95,7 @@ class AuthRepository {
   Future<AuthSession?> restoreSession() async {
     final user = _firebaseAuth.currentUser;
     if (user == null) return null;
-    return _buildSession(user);
+    return await _buildSession(user);
   }
 
   Future<AuthSession> login({
@@ -138,13 +138,13 @@ class AuthRepository {
 
   Future<AuthSession> signInWithGoogle() async {
     if (kIsWeb) {
-      return _signInWithGoogleProvider();
+      return await _signInWithGoogleProvider();
     }
 
     try {
       await _ensureGoogleSignInInitialized();
       if (!_googleSignIn.supportsAuthenticate()) {
-        return _signInWithGoogleProvider();
+        return await _signInWithGoogleProvider();
       }
 
       // Keep the explicit account chooser behavior, but use Android's native
@@ -159,7 +159,7 @@ class AuthRepository {
       }
 
       final authCredential = GoogleAuthProvider.credential(idToken: idToken);
-      return _signInWithGoogleCredential(authCredential);
+      return await _signInWithGoogleCredential(authCredential);
     } on GoogleSignInException catch (error) {
       throw StateError(_friendlyGoogleSignInError(error));
     }
@@ -178,7 +178,7 @@ class AuthRepository {
       }
 
       await markOnboardingSeen();
-      return _buildSession(user);
+      return await _buildSession(user);
     } on FirebaseAuthException catch (error) {
       _handlePendingGoogleLink(error);
       rethrow;
@@ -198,7 +198,7 @@ class AuthRepository {
       }
 
       await markOnboardingSeen();
-      return _buildSession(user);
+      return await _buildSession(user);
     } on FirebaseAuthException catch (error) {
       _handlePendingGoogleLink(error);
       rethrow;

@@ -17,7 +17,9 @@ class CommunitySpacesRepository {
   }) {
     return _firebaseFirestore
         .collection('communitySpaces')
-        .orderBy('sortOrder')
+        // Published only (the security rules reject queries that could
+        // return drafts); sorted on the device below.
+        .where('isPublished', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
           final spaces =

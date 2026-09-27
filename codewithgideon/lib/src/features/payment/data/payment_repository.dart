@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../core/config/payment_config.dart';
@@ -65,6 +66,21 @@ class PaymentRepository {
     }, SetOptions(merge: true));
   }
 
+  /// Headers for the payment functions. The login token lets the server
+  /// confirm the payment belongs to the signed-in student.
+  Future<Map<String, String>> _headers() async {
+    String? token;
+    try {
+      token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    } catch (_) {
+      token = null;
+    }
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
+  }
+
   Future<PaymentInitializationResult> initializePayment({
     required String email,
     required int amountKobo,
@@ -73,7 +89,7 @@ class PaymentRepository {
   }) async {
     final response = await http.post(
       Uri.parse(PaymentConfig.initializeUrl),
-      headers: const {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'email': email,
         'amount': amountKobo,
@@ -121,7 +137,7 @@ class PaymentRepository {
   }) async {
     final response = await http.post(
       Uri.parse(PaymentConfig.verifyUrl),
-      headers: const {'Content-Type': 'application/json'},
+      headers: await _headers(),
       body: jsonEncode({
         'reference': reference,
         'uid': checkout.profile.uid,
@@ -141,9 +157,19 @@ class PaymentRepository {
 
     final json = _decodeJson(
       response,
-      fallback:
-          'The payment verification service is not returning valid payment data right now.',
+      fallback: 'We could not confirm your payment yet.',
     );
+    if (json['needsReview'] == true) {
+      return PaymentVerificationResult(
+        safeWeeks: 0,
+        maxWeeks: checkout.course.durationWeeks,
+        alreadyProcessed: false,
+        needsReview: true,
+        message: (json['error'] as String?)?.trim().isNotEmpty == true
+            ? json['error'] as String
+            : "Your payment was received and is being reviewed. Your classes will unlock once it's confirmed.",
+      );
+    }
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
         json['ok'] != true) {
@@ -167,20 +193,18 @@ class PaymentRepository {
     final safeWeeks = checkout.maxAllowedWeeks <= 0
         ? 0
         : weeks.clamp(1, checkout.maxAllowedWeeks);
-    final split = calculateSplitFee(
-      checkout.course.pricePerWeek,
-      safeWeeks,
-      'upfront',
-    );
+    // The server charges the base course price (weeks x weekly rate).
+    // Any Paystack fee is added by Paystack at checkout, not by the app.
+    final basePrice = checkout.course.pricePerWeek * safeWeeks;
     return PaymentPriceBreakdown(
       weeks: safeWeeks,
       weeklyRate: checkout.course.pricePerWeek,
-      basePrice: split.targetRevenue,
-      totalFee: split.totalFees,
-      yourFeeShare: split.yourTotalCost,
-      studentFeeShare: split.studentTotalExtra,
-      totalPrice: split.totalCharged,
-      yourRevenue: split.yourTotalRevenue,
+      basePrice: basePrice,
+      totalFee: 0,
+      yourFeeShare: 0,
+      studentFeeShare: 0,
+      totalPrice: basePrice,
+      yourRevenue: basePrice,
     );
   }
 

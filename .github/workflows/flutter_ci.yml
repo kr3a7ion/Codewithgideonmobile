@@ -1,0 +1,87 @@
+name: Flutter CI
+
+# GitHub only reads workflows from the repository root, so this file lives
+# here and points at the Flutter project in ./codewithgideon.
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  analyze-test-build:
+    name: Flutter ${{ matrix.flutter }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.38.7 is the version in .metadata; "any" is the latest stable
+        # release, so an SDK upgrade that breaks the app shows up here first.
+        flutter: ['3.38.7', 'any']
+    defaults:
+      run:
+        working-directory: codewithgideon
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ matrix.flutter }}
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Reports formatting drift without failing the build. Run
+      # `dart format lib test` once and commit, then remove continue-on-error.
+      - name: Format check
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      # Also posts the issue list as a single annotation, so it is visible
+      # on the PR's Checks tab without opening the raw log.
+      - name: Analyze
+        run: |
+          set +e
+          flutter analyze > analyze.txt 2>&1
+          code=$?
+          cat analyze.txt
+          if [ "$code" -ne 0 ]; then
+            issues=$(grep ' • ' analyze.txt | head -120 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=flutter analyze (${{ matrix.flutter }})::${issues}"
+          fi
+          exit $code
+
+      - name: Test
+        run: |
+          set +e
+          flutter test --reporter expanded > test.txt 2>&1
+          code=$?
+          cat test.txt
+          if [ "$code" -ne 0 ]; then
+            details=$(grep -E -A12 'EXCEPTION CAUGHT|\[E\]|Expected:|Error:' test.txt | head -80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=flutter test (${{ matrix.flutter }})::${details}"
+          fi
+          exit $code
+
+      # Compiles the whole app, not just the parts the tests import.
+      - name: Build debug APK
+        run: |
+          set +e
+          flutter build apk --debug > build.txt 2>&1
+          code=$?
+          cat build.txt
+          if [ "$code" -ne 0 ]; then
+            details=$(grep -E -B2 -A6 'Error|error:|FAILURE|What went wrong' build.txt | head -80 | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=flutter build apk (${{ matrix.flutter }})::${details}"
+          fi
+          exit $code
