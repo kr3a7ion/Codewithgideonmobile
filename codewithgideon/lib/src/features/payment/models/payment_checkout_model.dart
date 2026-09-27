@@ -180,9 +180,17 @@ class PaymentVerificationResult {
     required this.safeWeeks,
     required this.maxWeeks,
     required this.alreadyProcessed,
+    this.needsReview = false,
+    this.message = '',
   });
 
   final int safeWeeks;
   final int maxWeeks;
   final bool alreadyProcessed;
+
+  /// The server received the payment but couldn't credit it automatically
+  /// (for example the amount didn't match). An admin reviews it. The student
+  /// must not be asked to pay again.
+  final bool needsReview;
+  final String message;
 }
