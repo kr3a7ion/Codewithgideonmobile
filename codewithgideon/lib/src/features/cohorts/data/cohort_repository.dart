@@ -33,9 +33,7 @@ class CohortRepository {
           seasonKey: (data['seasonKey'] as String?) ?? '',
         );
       }
-      throw StateError(
-        'No active cohort found in Firestore for path "$pathId".',
-      );
+      throw StateError('Your active class group is not ready yet.');
     });
   }
 

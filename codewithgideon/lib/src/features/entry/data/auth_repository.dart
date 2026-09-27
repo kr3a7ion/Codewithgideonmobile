@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum EnrollmentStatus { enrolled, pending, notRegistered }
@@ -84,7 +86,9 @@ class AuthRepository {
   final SharedPreferences _preferences;
   final FirebaseAuth _firebaseAuth;
   final FirebaseFirestore _firebaseFirestore;
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   _PendingGoogleLink? _pendingGoogleLink;
+  bool _googleSignInInitialized = false;
 
   static const _onboardingSeenKey = 'auth.onboarding_seen';
 
@@ -133,6 +137,35 @@ class AuthRepository {
   }
 
   Future<AuthSession> signInWithGoogle() async {
+    if (kIsWeb) {
+      return _signInWithGoogleProvider();
+    }
+
+    try {
+      await _ensureGoogleSignInInitialized();
+      if (!_googleSignIn.supportsAuthenticate()) {
+        return _signInWithGoogleProvider();
+      }
+
+      // Keep the explicit account chooser behavior, but use Android's native
+      // Credential Manager UI instead of Firebase's browser/custom-tab flow.
+      await _googleSignIn.signOut();
+      final googleAccount = await _googleSignIn.authenticate();
+      final idToken = googleAccount.authentication.idToken;
+      if (idToken == null || idToken.isEmpty) {
+        throw StateError(
+          'Google sign-in needs a quick setup update before it can continue. Please contact support.',
+        );
+      }
+
+      final authCredential = GoogleAuthProvider.credential(idToken: idToken);
+      return _signInWithGoogleCredential(authCredential);
+    } on GoogleSignInException catch (error) {
+      throw StateError(_friendlyGoogleSignInError(error));
+    }
+  }
+
+  Future<AuthSession> _signInWithGoogleProvider() async {
     final provider = GoogleAuthProvider()
       ..addScope('email')
       ..setCustomParameters({'prompt': 'select_account'});
@@ -147,19 +180,27 @@ class AuthRepository {
       await markOnboardingSeen();
       return _buildSession(user);
     } on FirebaseAuthException catch (error) {
-      if (error.code == 'account-exists-with-different-credential') {
-        final email = error.email?.trim();
-        final credential = error.credential;
+      _handlePendingGoogleLink(error);
+      rethrow;
+    }
+  }
 
-        if (email != null && email.isNotEmpty && credential != null) {
-          _pendingGoogleLink = _PendingGoogleLink(
-            email: email,
-            credential: credential,
-          );
-          throw PendingGoogleLinkException(email: email);
-        }
+  Future<AuthSession> _signInWithGoogleCredential(
+    AuthCredential authCredential,
+  ) async {
+    try {
+      final credential = await _firebaseAuth.signInWithCredential(
+        authCredential,
+      );
+      final user = credential.user;
+      if (user == null) {
+        throw StateError('Google sign-in did not return a user account.');
       }
 
+      await markOnboardingSeen();
+      return _buildSession(user);
+    } on FirebaseAuthException catch (error) {
+      _handlePendingGoogleLink(error);
       rethrow;
     }
   }
@@ -174,6 +215,14 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
+    if (!kIsWeb) {
+      try {
+        await _ensureGoogleSignInInitialized();
+        await _googleSignIn.signOut();
+      } on Object {
+        // Firebase Auth remains the source of truth for the app session.
+      }
+    }
     await _firebaseAuth.signOut();
   }
 
@@ -183,6 +232,43 @@ class AuthRepository {
 
   Future<void> markOnboardingSeen() async {
     await _preferences.setBool(_onboardingSeenKey, true);
+  }
+
+  Future<void> _ensureGoogleSignInInitialized() async {
+    if (_googleSignInInitialized) return;
+    await _googleSignIn.initialize();
+    _googleSignInInitialized = true;
+  }
+
+  void _handlePendingGoogleLink(FirebaseAuthException error) {
+    if (error.code != 'account-exists-with-different-credential') return;
+
+    final email = error.email?.trim();
+    final credential = error.credential;
+    if (email == null || email.isEmpty || credential == null) return;
+
+    _pendingGoogleLink = _PendingGoogleLink(
+      email: email,
+      credential: credential,
+    );
+    throw PendingGoogleLinkException(email: email);
+  }
+
+  String _friendlyGoogleSignInError(GoogleSignInException error) {
+    return switch (error.code) {
+      GoogleSignInExceptionCode.canceled ||
+      GoogleSignInExceptionCode.interrupted =>
+        'Google sign-in was cancelled before it finished.',
+      GoogleSignInExceptionCode.clientConfigurationError ||
+      GoogleSignInExceptionCode.providerConfigurationError =>
+        'Google sign-in needs a quick setup update before it can continue. Please contact support.',
+      GoogleSignInExceptionCode.uiUnavailable =>
+        'Google sign-in could not open on this device. Please try again.',
+      _ =>
+        error.description?.trim().isNotEmpty == true
+            ? error.description!.trim()
+            : 'Google sign-in could not start. Please try again.',
+    };
   }
 
   Future<AuthSession> _buildSession(User user) async {

@@ -41,14 +41,10 @@ class MentorRequestRepository {
   CollectionReference<Map<String, dynamic>> get _threadsCollection =>
       _db.collection('mentorThreads');
 
-  String buildThreadId({
-    required String studentUid,
-    required String sessionId,
-  }) {
+  String buildThreadId({required String studentUid}) {
     final sanitize = RegExp(r'[^A-Za-z0-9._-]+');
     final cleanUid = studentUid.trim().replaceAll(sanitize, '_');
-    final cleanSessionId = sessionId.trim().replaceAll(sanitize, '_');
-    return 'mentor_${cleanUid}_$cleanSessionId';
+    return 'mentor_$cleanUid';
   }
 
   String _cacheKey(String studentUid, String? sessionId) {
@@ -75,9 +71,8 @@ class MentorRequestRepository {
       return decoded
           .whereType<Map>()
           .map(
-            (item) => MentorChatMessage.fromCache(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) =>
+                MentorChatMessage.fromCache(Map<String, dynamic>.from(item)),
           )
           .where((item) => item.body.isNotEmpty)
           .toList()
@@ -137,25 +132,31 @@ class MentorRequestRepository {
 
   Future<String> submitRequest({
     required StudentDashboardSnapshot dashboard,
-    required CohortSessionModel session,
+    CohortSessionModel? session,
+    String? fallbackSessionId,
     required String message,
     required MentorRequestContext contextType,
     String? clientMessageId,
   }) async {
     final profile = dashboard.profile;
+    final sessionId = (session?.id ?? fallbackSessionId ?? '').trim();
+    final sessionTitle = (session?.title ?? 'General mentor support').trim();
+    final pathTitle = (session?.pathTitle ?? dashboard.path.title).trim();
+    final cohortKey = (session?.cohortKey ?? dashboard.activeCohort.cohortKey)
+        .trim();
     final callable = _fn.httpsCallable('sendMentorRequest');
     final response = await callable.call(<String, dynamic>{
       'name': profile.fullName.trim(),
       'email': profile.email.trim(),
       'message': message.trim(),
       'clientMessageId': (clientMessageId ?? '').trim(),
-      'contextType': contextType == MentorRequestContext.live
+      'contextType': session != null && contextType == MentorRequestContext.live
           ? 'live'
           : 'recorded',
-      'sessionId': session.id,
-      'sessionTitle': session.title,
-      'pathTitle': session.pathTitle,
-      'cohortKey': session.cohortKey,
+      'sessionId': sessionId,
+      'sessionTitle': sessionTitle,
+      'pathTitle': pathTitle,
+      'cohortKey': cohortKey,
       'cohortId': profile.cohortId,
       'cohortLabel': profile.cohortLabel,
       'studentPhone': profile.phone,
@@ -209,22 +210,22 @@ MentorChatMessage _systemErrorMessage({
       error is FirebaseException && error.code == 'permission-denied';
 
   return MentorChatMessage(
-    id:
-        'system-$conversationId-${isPermissionDenied ? 'permission' : 'sync'}',
+    id: 'system-$conversationId-${isPermissionDenied ? 'permission' : 'sync'}',
     conversationId: conversationId,
     sessionId: sessionId,
     body: isPermissionDenied
-        ? 'Mentor replies are temporarily unavailable.'
-        : 'Mentor replies are temporarily unavailable. Please check your connection and try again.',
+        ? 'We are setting up this mentor conversation. Send your message and replies will appear here.'
+        : 'We could not refresh mentor replies just now. Check your connection and try again.',
     senderType: MentorChatSenderType.system,
-    senderName: 'System',
+    senderName: 'CodeWithGideon',
     createdAt: DateTime.now(),
     status: 'system',
     source: 'mobile-system',
   );
 }
 
-class MentorConversationNotifier extends AsyncNotifier<List<MentorChatMessage>> {
+class MentorConversationNotifier
+    extends AsyncNotifier<List<MentorChatMessage>> {
   MentorConversationNotifier(this.query);
 
   final MentorConversationQuery query;
@@ -264,38 +265,52 @@ class MentorConversationNotifier extends AsyncNotifier<List<MentorChatMessage>> 
     final preferredConversationId = ref.watch(
       mentorConversationIdOverrideProvider(query.sessionId),
     );
-    final conversationId =
-        (preferredConversationId ?? query.conversationId)?.trim().isNotEmpty ==
-            true
-        ? (preferredConversationId ?? query.conversationId)!.trim()
-        : _repository.buildThreadId(
-            studentUid: session.uid,
-            sessionId: query.sessionId ?? '',
-          );
+    final explicitConversationId =
+        (preferredConversationId ?? query.conversationId)?.trim();
+    final sessionId = (query.sessionId ?? '').trim();
+    final conversationId = explicitConversationId?.isNotEmpty == true
+        ? explicitConversationId!
+        : _repository.buildThreadId(studentUid: session.uid);
     _bindConversationTimeline(
       studentUid: session.uid,
       conversationId: conversationId,
-      sessionId: query.sessionId ?? '',
+      sessionId: sessionId,
     );
     return cached;
   }
 
   void _bindSummaryTimeline({required String studentUid}) {
-    _threadsSub = _repository.watchStudentThreads(studentUid).listen((docs) {
-      final summaries = docs
-          .map(MentorChatMessage.fromThreadSummary)
-          .where((item) => item.body.trim().isNotEmpty)
-          .toList()
-        ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      state = AsyncData(summaries);
-      unawaited(
-        _repository.saveCachedConversation(
-          studentUid: studentUid,
-          sessionId: query.sessionId,
-          messages: summaries,
-        ),
-      );
-    });
+    _threadsSub = _repository
+        .watchStudentThreads(studentUid)
+        .listen(
+          (docs) {
+            final summaries =
+                docs
+                    .map(MentorChatMessage.fromThreadSummary)
+                    .where((item) => item.body.trim().isNotEmpty)
+                    .toList()
+                  ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+            state = AsyncData(summaries);
+            unawaited(
+              _repository.saveCachedConversation(
+                studentUid: studentUid,
+                sessionId: query.sessionId,
+                messages: summaries,
+              ),
+            );
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            state = AsyncData(
+              _dedupeTimeline(state.value ?? const <MentorChatMessage>[], [
+                _systemErrorMessage(
+                  conversationId: 'mentor-summary',
+                  sessionId: '',
+                  error: error,
+                ),
+              ]),
+            );
+          },
+        );
   }
 
   void _bindConversationTimeline({
@@ -306,65 +321,91 @@ class MentorConversationNotifier extends AsyncNotifier<List<MentorChatMessage>> 
     Map<String, dynamic> rootData = <String, dynamic>{};
     List<MentorChatMessage> subMessages = const <MentorChatMessage>[];
 
+    List<MentorChatMessage> applyThreadReceipt(
+      List<MentorChatMessage> messages,
+    ) {
+      final threadStatus =
+          rootData['status']?.toString().trim().isNotEmpty == true
+          ? rootData['status'].toString().trim()
+          : null;
+      if (threadStatus == null || threadStatus.toLowerCase() == 'new') {
+        return messages;
+      }
+      return messages
+          .map(
+            (item) => item.isMine && (item.status ?? '').trim().isEmpty
+                ? item.copyWith(status: threadStatus)
+                : item,
+          )
+          .toList();
+    }
+
     void emit() {
-      state = AsyncData(subMessages);
+      final visibleMessages = applyThreadReceipt(subMessages);
+      state = AsyncData(visibleMessages);
       unawaited(
         _repository.saveCachedConversation(
           studentUid: studentUid,
           sessionId: query.sessionId,
-          messages: subMessages,
+          messages: visibleMessages,
         ),
       );
     }
 
-    _threadDocSub = _repository.watchThreadDoc(conversationId).listen((doc) {
-      rootData = doc.data() ?? <String, dynamic>{};
-      emit();
-    });
+    _threadDocSub = _repository
+        .watchThreadDoc(conversationId)
+        .listen(
+          (doc) {
+            rootData = doc.data() ?? <String, dynamic>{};
+            emit();
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            state = AsyncData(state.value ?? subMessages);
+          },
+        );
 
-    _messagesSub = _repository.watchSubMessages(conversationId).listen((
-      messages,
-    ) {
-      subMessages = messages
-          .map(
-            (item) => item.sessionId.trim().isEmpty
-                ? MentorChatMessage(
-                    id: item.id,
-                    conversationId: item.conversationId,
-                    sessionId:
-                        rootData['sessionId']?.toString().trim().isNotEmpty ==
-                            true
-                        ? rootData['sessionId'].toString().trim()
-                        : sessionId,
-                    body: item.body,
-                    senderType: item.senderType,
-                    senderName: item.senderName,
-                    createdAt: item.createdAt,
-                    senderEmail: item.senderEmail,
-                    status: item.status,
-                    source: item.source,
-                    clientMessageId: item.clientMessageId,
-                    isConversationStarter: item.isConversationStarter,
-                  )
-                : item,
-          )
-          .toList();
-      emit();
-    }, onError: (Object error, StackTrace stackTrace) {
-      final fallbackSessionId =
-          rootData['sessionId']?.toString().trim().isNotEmpty == true
-          ? rootData['sessionId'].toString().trim()
-          : sessionId;
-      state = AsyncData(
-        _dedupeTimeline(subMessages, <MentorChatMessage>[
-          _systemErrorMessage(
-            conversationId: conversationId,
-            sessionId: fallbackSessionId,
-            error: error,
-          ),
-        ]),
-      );
-    });
+    _messagesSub = _repository
+        .watchSubMessages(conversationId)
+        .listen(
+          (messages) {
+            subMessages = messages.map((item) {
+              final fallbackSessionId =
+                  rootData['sessionId']?.toString().trim().isNotEmpty == true
+                  ? rootData['sessionId'].toString().trim()
+                  : sessionId;
+              final threadStatus =
+                  rootData['status']?.toString().trim().isNotEmpty == true
+                  ? rootData['status'].toString().trim()
+                  : null;
+              final normalized = item.sessionId.trim().isEmpty
+                  ? item.copyWith(sessionId: fallbackSessionId)
+                  : item;
+              if (normalized.isMine &&
+                  (normalized.status ?? '').trim().isEmpty &&
+                  threadStatus != null &&
+                  threadStatus.toLowerCase() != 'new') {
+                return normalized.copyWith(status: threadStatus);
+              }
+              return normalized;
+            }).toList();
+            emit();
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            final fallbackSessionId =
+                rootData['sessionId']?.toString().trim().isNotEmpty == true
+                ? rootData['sessionId'].toString().trim()
+                : sessionId;
+            state = AsyncData(
+              _dedupeTimeline(subMessages, <MentorChatMessage>[
+                _systemErrorMessage(
+                  conversationId: conversationId,
+                  sessionId: fallbackSessionId,
+                  error: error,
+                ),
+              ]),
+            );
+          },
+        );
   }
 
   Future<void> _cancelAll() async {
@@ -377,15 +418,17 @@ class MentorConversationNotifier extends AsyncNotifier<List<MentorChatMessage>> 
   }
 }
 
-final mentorRequestRepositoryProvider = Provider<MentorRequestRepository>((ref) {
+final mentorRequestRepositoryProvider = Provider<MentorRequestRepository>((
+  ref,
+) {
   return MentorRequestRepository(
     firebaseFirestore: ref.watch(firebaseFirestoreProvider),
     firebaseFunctions: ref.watch(firebaseFunctionsProvider),
   );
 });
 
-final mentorConversationIdOverrideProvider =
-    StateProvider.autoDispose.family<String?, String?>((ref, sessionId) => null);
+final mentorConversationIdOverrideProvider = StateProvider.autoDispose
+    .family<String?, String?>((ref, sessionId) => null);
 
 final mentorConversationProvider = AsyncNotifierProvider.autoDispose
     .family<
@@ -408,6 +451,8 @@ List<MentorChatMessage> reconcileOptimistic({
   required List<MentorChatMessage> persisted,
 }) {
   return optimistic
-      .where((item) => !persisted.any((message) => _isSameMessage(message, item)))
+      .where(
+        (item) => !persisted.any((message) => _isSameMessage(message, item)),
+      )
       .toList();
 }

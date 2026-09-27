@@ -24,9 +24,7 @@ class StudentRepository {
       if (snapshot.docs.isNotEmpty) {
         return _mapStudent(snapshot.docs.first);
       }
-      throw StateError(
-        'Student profile for "$email" was not found in Firestore collection "users".',
-      );
+      throw StateError('We could not find your student profile yet.');
     });
   }
 

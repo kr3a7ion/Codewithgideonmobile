@@ -34,7 +34,7 @@ class DashboardRepository {
       final profile = await _studentRepository.getStudentProfileByUid(uid);
       if (profile == null) {
         throw StateError(
-          'Student profile for uid "$uid" was not found in Firestore.',
+          'We could not find your student profile yet. Please wait a moment and try again.',
         );
       }
       final path = await _catalogRepository.getPath(profile.pathId);

@@ -12,7 +12,7 @@ import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../home/models/student_dashboard_snapshot.dart';
 
-const _settingsContactLinks =
+const _contactLinks =
     <({IconData icon, String title, String subtitle, String url})>[
       (
         icon: Icons.camera_alt_outlined,
@@ -30,10 +30,30 @@ const _settingsContactLinks =
         icon: Icons.chat_bubble_outline_rounded,
         title: 'WhatsApp',
         subtitle: 'Direct chat with the team',
-        url:
-            'https://api.whatsapp.com/message/NMQR2ZKNJTZBL1?autoload=1&app_absent=0',
+        url: 'https://wa.me/message/NMQR2ZKNJTZBL1',
       ),
     ];
+
+Future<void> _openContactLink(BuildContext context, String rawUrl) async {
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null) {
+    showAppSnackBar(context, 'This contact link is not ready yet.');
+    return;
+  }
+
+  try {
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && context.mounted) {
+      showAppSnackBar(
+        context,
+        'We could not open that contact link right now.',
+      );
+    }
+  } catch (_) {
+    if (!context.mounted) return;
+    showAppSnackBar(context, 'We could not open that contact link right now.');
+  }
+}
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -228,6 +248,7 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ),
                     const Gap(16),
+                    
                     AppCard(
                       radius: 28,
                       color: Theme.of(
@@ -255,6 +276,8 @@ class ProfileScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
+                    const Gap(16),
+                    const _StayConnectedCard(),
                     const Gap(16),
                     AppCard(
                       radius: 28,
@@ -823,22 +846,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
-  Future<void> _openContactLink(BuildContext context, String rawUrl) async {
-    final uri = Uri.tryParse(rawUrl);
-    if (uri == null) {
-      showAppSnackBar(context, 'This contact link is not ready yet.');
-      return;
-    }
-
-    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!launched && context.mounted) {
-      showAppSnackBar(
-        context,
-        'We could not open that contact link right now.',
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
@@ -915,47 +922,6 @@ class SettingsScreen extends ConsumerWidget {
                 AppCard(
                   radius: 28,
                   color: Theme.of(context).cardColor.withValues(alpha: 0.82),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Stay Connected',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const Gap(8),
-                      Text(
-                        'We love hearing from our students and community!',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: _muted(context)),
-                      ),
-                      const Gap(18),
-                      for (
-                        var index = 0;
-                        index < _settingsContactLinks.length;
-                        index++
-                      ) ...[
-                        _ProfileAction(
-                          icon: _settingsContactLinks[index].icon,
-                          title: _settingsContactLinks[index].title,
-                          subtitle: _settingsContactLinks[index].subtitle,
-                          onTap: () => _openContactLink(
-                            context,
-                            _settingsContactLinks[index].url,
-                          ),
-                        ),
-                        if (index != _settingsContactLinks.length - 1)
-                          const Divider(height: 18),
-                      ],
-                    ],
-                  ),
-                ),
-                const Gap(18),
-                AppCard(
-                  radius: 28,
-                  color: Theme.of(context).cardColor.withValues(alpha: 0.82),
                   child: _ProfileAction(
                     icon: Icons.privacy_tip_outlined,
                     title: 'Privacy Policy',
@@ -981,6 +947,46 @@ class SettingsScreen extends ConsumerWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StayConnectedCard extends StatelessWidget {
+  const _StayConnectedCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      radius: 28,
+      color: Theme.of(context).cardColor.withValues(alpha: 0.82),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Stay connected',
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const Gap(8),
+          Text(
+            'Follow the community, get quick updates, or chat with the team when you need help.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: _muted(context)),
+          ),
+          const Gap(18),
+          for (var index = 0; index < _contactLinks.length; index++) ...[
+            _ProfileAction(
+              icon: _contactLinks[index].icon,
+              title: _contactLinks[index].title,
+              subtitle: _contactLinks[index].subtitle,
+              onTap: () => _openContactLink(context, _contactLinks[index].url),
+            ),
+            if (index != _contactLinks.length - 1) const Divider(height: 18),
+          ],
         ],
       ),
     );

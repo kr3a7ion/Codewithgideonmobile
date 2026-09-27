@@ -254,6 +254,19 @@ String _friendlyAuthError(Object error) {
   }
 
   final raw = '$error'.replaceFirst('Exception: ', '').trim();
+  if (raw.contains('Google sign-in')) {
+    return raw.replaceFirst('Bad state: ', '');
+  }
+  if (raw.contains('network-request-failed') ||
+      raw.contains('SocketException') ||
+      raw.contains('ClientException')) {
+    return 'We could not reach the server. Check your connection and try again.';
+  }
+  if (raw.contains('permission-denied') ||
+      raw.contains('PERMISSION_DENIED') ||
+      raw.contains('insufficient permissions')) {
+    return 'We could not complete this request right now. Please try again, or contact support if it continues.';
+  }
   if (raw.isEmpty) return 'Something went wrong. Please try again.';
-  return raw;
+  return 'Something went wrong. Please try again.';
 }
