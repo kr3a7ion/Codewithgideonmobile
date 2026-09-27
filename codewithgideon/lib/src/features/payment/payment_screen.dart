@@ -358,27 +358,41 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           _handleExit();
         },
         onSuccess: () async {
+          // Paystack has charged the card at this point. Whatever verify
+          // says, don't leave the student on a screen that lets them pay
+          // again: the webhook credits the payment even if verify fails.
+          _paymentCompleted = true;
+          String message;
           try {
-            _paymentCompleted = true;
-            await paymentRepository.verifyPayment(
+            final result = await paymentRepository.verifyPayment(
               checkout: checkout,
               pricing: pricing,
               reference: initialized.reference,
             );
+            if (result.needsReview) {
+              message = "${result.message} Please don't pay again.";
+            } else {
+              message = checkout.kind == PaymentFlowKind.topUp
+                  ? 'Top up confirmed. Your extra weeks are now available.'
+                  : 'Payment confirmed. Welcome to your dashboard.';
+            }
+          } catch (_) {
+            message =
+                "Payment received. We're still confirming it, so please don't "
+                'pay again. Your weeks will appear shortly. If they don\'t, '
+                'contact support with reference ${initialized.reference}.';
+          }
+          try {
             if (!mounted) return;
             ref.invalidate(dashboardSnapshotProvider);
             await ref.read(authControllerProvider.notifier).refreshSession();
+          } catch (_) {
+            // The dashboard reloads on its own; a failed refresh isn't fatal.
+          }
+          try {
             if (!mounted) return;
-            showAppSnackBar(
-              context,
-              checkout.kind == PaymentFlowKind.topUp
-                  ? 'Top up confirmed. Your extra weeks are now available.'
-                  : 'Payment confirmed. Welcome to your dashboard.',
-            );
+            showAppSnackBar(context, message);
             context.go('/dashboard');
-          } catch (error) {
-            if (!mounted) return;
-            showAppSnackBar(context, _prettyPaymentError(error));
           } finally {
             if (mounted) {
               setState(() => _processing = false);

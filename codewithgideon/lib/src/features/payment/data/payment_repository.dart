@@ -155,7 +155,21 @@ class PaymentRepository {
       }),
     );
 
-    final json = _decodeJson(response.body as http.Response, fallback: '');
+    final json = _decodeJson(
+      response,
+      fallback: 'We could not confirm your payment yet.',
+    );
+    if (json['needsReview'] == true) {
+      return PaymentVerificationResult(
+        safeWeeks: 0,
+        maxWeeks: checkout.course.durationWeeks,
+        alreadyProcessed: false,
+        needsReview: true,
+        message: (json['error'] as String?)?.trim().isNotEmpty == true
+            ? json['error'] as String
+            : "Your payment was received and is being reviewed. Your classes will unlock once it's confirmed.",
+      );
+    }
     if (response.statusCode < 200 ||
         response.statusCode >= 300 ||
         json['ok'] != true) {
