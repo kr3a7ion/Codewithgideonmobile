@@ -71,7 +71,6 @@ class _CommunityChannelsScreenState
               },
             ),
             data: (snapshot) {
-              final route = _mentorRouteForDashboard(snapshot) ?? '/mentor';
               final liveSpacesCount = spaces.maybeWhen(
                 data: (items) => items.length,
                 orElse: () => 0,
@@ -302,7 +301,7 @@ class _CommunityChannelsScreenState
                                   description: latestMentorReply == null
                                       ? 'For quick support and feedback.'
                                       : latestMentorReply.body,
-                                  onTap: () => context.push(route),
+                                  onTap: () => context.push('/mentor'),
                                   badge: latestMentorReply == null
                                       ? null
                                       : 'Reply ready',
@@ -527,10 +526,17 @@ class AskMentorScreen extends ConsumerStatefulWidget {
   ConsumerState<AskMentorScreen> createState() => _AskMentorScreenState();
 }
 
+const _generalMentorSessionId = 'general';
+
 class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
   final TextEditingController _controller = TextEditingController();
   final List<MentorChatMessage> _optimisticMessages = <MentorChatMessage>[];
+  final Set<String> _locallyReadMentorReplyIds = <String>{};
   bool _isSending = false;
+
+  String get _conversationSessionId {
+    return _generalMentorSessionId;
+  }
 
   @override
   void dispose() {
@@ -541,10 +547,11 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
   @override
   Widget build(BuildContext context) {
     final dashboardAsync = ref.watch(dashboardSnapshotProvider);
+    final conversationSessionId = _conversationSessionId;
     final conversationAsync = ref.watch(
       mentorRequestsProvider(
         MentorConversationQuery(
-          sessionId: widget.sessionId,
+          sessionId: conversationSessionId,
           conversationId: null,
         ),
       ),
@@ -568,6 +575,7 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
       storedMessages,
       _optimisticMessages,
     );
+    _markVisibleMentorRepliesRead(mergedMessages);
     final syncedOptimistic = reconcileOptimistic(
       optimistic: _optimisticMessages,
       persisted: storedMessages,
@@ -724,9 +732,10 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
                         child: Column(
                           children: [
-                            _MentorIntroBubble(isDark: isDark),
-                            if (mergedMessages.isEmpty)
+                            if (mergedMessages.isEmpty) ...[
+                              _MentorIntroBubble(isDark: isDark),
                               const _MentorEmptyConversation(),
+                            ],
                           ],
                         ),
                       ),
@@ -816,10 +825,7 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
 
   CohortSessionModel? _resolveSession(StudentDashboardSnapshot dashboard) {
     if (widget.sessionId == null) {
-      return dashboard.liveSession ??
-          dashboard.latestUnlockedSession ??
-          dashboard.nextSession ??
-          dashboard.latestRecordedSession;
+      return null;
     }
 
     for (final item in dashboard.unlockedSessions) {
@@ -832,15 +838,26 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     final message = _controller.text.trim();
     if (message.isEmpty || _isSending) return;
     final clientMessageId =
-        'client-${DateTime.now().microsecondsSinceEpoch}-${widget.sessionId ?? 'mentor'}';
+        'client-${DateTime.now().microsecondsSinceEpoch}-$_conversationSessionId';
 
-    final dashboard = await ref.read(dashboardSnapshotProvider.future);
-    final session = _resolveSession(dashboard);
-    if (session == null) {
+    final StudentDashboardSnapshot dashboard;
+    try {
+      dashboard = await ref.read(dashboardSnapshotProvider.future);
+    } catch (_) {
       if (!mounted) return;
       showAppSnackBar(
         context,
-        'We could not find the class context for this mentor chat yet.',
+        'We are still preparing your learning details. Please wait a moment and try again.',
+      );
+      return;
+    }
+
+    final session = _resolveSession(dashboard);
+    if (session == null && widget.sessionId != null) {
+      if (!mounted) return;
+      showAppSnackBar(
+        context,
+        'This mentor conversation is still getting ready. Please wait a moment and try again.',
       );
       return;
     }
@@ -848,7 +865,7 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     final optimistic = MentorChatMessage(
       id: 'optimistic-${DateTime.now().microsecondsSinceEpoch}',
       conversationId: '',
-      sessionId: session.id,
+      sessionId: session?.id ?? _conversationSessionId,
       body: message,
       senderType: MentorChatSenderType.user,
       senderName: dashboard.profile.fullName,
@@ -871,6 +888,7 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
           .submitRequest(
             dashboard: dashboard,
             session: session,
+            fallbackSessionId: _conversationSessionId,
             message: message,
             contextType: widget.contextType,
             clientMessageId: clientMessageId,
@@ -879,7 +897,7 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
         ref
                 .read(
                   mentorConversationIdOverrideProvider(
-                    widget.sessionId,
+                    _conversationSessionId,
                   ).notifier,
                 )
                 .state =
@@ -912,7 +930,7 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
       ref.invalidate(
         mentorRequestsProvider(
           MentorConversationQuery(
-            sessionId: widget.sessionId,
+            sessionId: _conversationSessionId,
             conversationId: conversationId.isEmpty ? null : conversationId,
           ),
         ),
@@ -950,14 +968,31 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     final repository = ref.read(mentorRequestRepositoryProvider);
     final cached = await repository.loadCachedConversation(
       studentUid: session.uid,
-      sessionId: widget.sessionId,
+      sessionId: _conversationSessionId,
     );
     final merged = mergeChatTimeline(cached, _optimisticMessages);
     await repository.saveCachedConversation(
       studentUid: session.uid,
-      sessionId: widget.sessionId,
+      sessionId: _conversationSessionId,
       messages: merged,
     );
+  }
+
+  void _markVisibleMentorRepliesRead(List<MentorChatMessage> messages) {
+    final replies = messages
+        .where(
+          (item) =>
+              item.isAdmin && !_locallyReadMentorReplyIds.contains(item.id),
+        )
+        .toList();
+    if (replies.isEmpty) return;
+    _locallyReadMentorReplyIds.addAll(replies.map((item) => item.id));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(markMentorRepliesRead(replies));
+      ref.invalidate(unreadMessagesCountProvider);
+    });
   }
 }
 
@@ -972,6 +1007,8 @@ class DirectMessagesScreen extends ConsumerStatefulWidget {
 class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
   Set<String> _readIds = <String>{};
   Set<String> _hiddenIds = <String>{};
+  Set<String> _readMentorReplyIds = <String>{};
+  Set<String> _hiddenMentorReplyIds = <String>{};
   bool _notificationPrefsReady = false;
 
   @override
@@ -983,10 +1020,14 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
   Future<void> _loadNotificationPrefs() async {
     final readIds = await loadReadNotificationIds();
     final hiddenIds = await loadHiddenNotificationIds();
+    final readMentorReplyIds = await loadReadMentorReplyIds();
+    final hiddenMentorReplyIds = await loadHiddenMentorReplyIds();
     if (!mounted) return;
     setState(() {
       _readIds = readIds;
       _hiddenIds = hiddenIds;
+      _readMentorReplyIds = readMentorReplyIds;
+      _hiddenMentorReplyIds = hiddenMentorReplyIds;
       _notificationPrefsReady = true;
     });
   }
@@ -1092,23 +1133,53 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
     );
   }
 
-  Future<void> _markAllAsRead(List<CohortMessageModel> messages) async {
-    if (messages.isEmpty) return;
+  Future<void> _openMentorReply(MentorChatMessage item) async {
+    await markMentorRepliesRead([item]);
+    if (!mounted) return;
+    setState(() {
+      _readMentorReplyIds = {..._readMentorReplyIds, item.id};
+    });
+    ref.invalidate(unreadMessagesCountProvider);
+    context.push('/mentor');
+  }
+
+  Future<void> _markAllAsRead(
+    List<CohortMessageModel> messages,
+    List<MentorChatMessage> mentorReplies,
+  ) async {
+    if (messages.isEmpty && mentorReplies.isEmpty) return;
     await markNotificationsRead(messages);
+    await markMentorRepliesRead(mentorReplies);
     if (!mounted) return;
     setState(() {
       _readIds = {..._readIds, ...messages.map((item) => item.id)};
+      _readMentorReplyIds = {
+        ..._readMentorReplyIds,
+        ...mentorReplies.map((item) => item.id),
+      };
     });
     ref.invalidate(unreadMessagesCountProvider);
   }
 
-  Future<void> _clearAllNotifications(List<CohortMessageModel> messages) async {
-    if (messages.isEmpty) return;
+  Future<void> _clearAllNotifications(
+    List<CohortMessageModel> messages,
+    List<MentorChatMessage> mentorReplies,
+  ) async {
+    if (messages.isEmpty && mentorReplies.isEmpty) return;
     await clearNotifications(messages);
+    await clearMentorReplyNotifications(mentorReplies);
     if (!mounted) return;
     setState(() {
       _hiddenIds = {..._hiddenIds, ...messages.map((item) => item.id)};
       _readIds = {..._readIds, ...messages.map((item) => item.id)};
+      _hiddenMentorReplyIds = {
+        ..._hiddenMentorReplyIds,
+        ...mentorReplies.map((item) => item.id),
+      };
+      _readMentorReplyIds = {
+        ..._readMentorReplyIds,
+        ...mentorReplies.map((item) => item.id),
+      };
     });
     ref.invalidate(unreadMessagesCountProvider);
   }
@@ -1116,6 +1187,11 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
   @override
   Widget build(BuildContext context) {
     final cohortMessages = ref.watch(cohortMessagesProvider);
+    final mentorMessages = ref.watch(
+      mentorRequestsProvider(
+        const MentorConversationQuery(sessionId: null, conversationId: null),
+      ),
+    );
     return cohortMessages.when(
       loading: () => const AppScreen(
         body: SafeArea(
@@ -1143,9 +1219,27 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
         final visibleMessages = messages
             .where((item) => !_hiddenIds.contains(item.id))
             .toList();
-        final unreadCount = visibleMessages
+        final visibleMentorReplies =
+            mentorMessages
+                .maybeWhen(
+                  data: (items) => items,
+                  orElse: () => const <MentorChatMessage>[],
+                )
+                .where(
+                  (item) =>
+                      item.isAdmin && !_hiddenMentorReplyIds.contains(item.id),
+                )
+                .toList()
+              ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        final unreadCohortCount = visibleMessages
             .where((item) => !_readIds.contains(item.id))
             .length;
+        final unreadMentorCount = visibleMentorReplies
+            .where((item) => !_readMentorReplyIds.contains(item.id))
+            .length;
+        final unreadCount = unreadCohortCount + unreadMentorCount;
+        final hasNotifications =
+            visibleMessages.isNotEmpty || visibleMentorReplies.isNotEmpty;
 
         return AppScreen(
           body: SafeArea(
@@ -1166,7 +1260,7 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
                       PremiumPageHeader(
                         title: 'Notifications',
                         subtitle:
-                            'Announcements, updates, and action items from your cohort team.',
+                            'Mentor replies, announcements, and action items from your cohort team.',
                         leading: PremiumIconButton(
                           icon: Icons.arrow_back_rounded,
                           onTap: () => context.pop(),
@@ -1242,11 +1336,12 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
                           message: 'Syncing what you have already read.',
                           compact: true,
                         )
-                      : visibleMessages.isEmpty
+                      : !hasNotifications
                       ? AppEmptyState(
                           title: 'No notifications left',
-                          message: messages.isEmpty
-                              ? 'Your mentor has not sent any cohort messages yet.'
+                          message:
+                              messages.isEmpty && visibleMentorReplies.isEmpty
+                              ? 'Mentor replies and cohort updates will appear here.'
                               : 'Everything here has been cleared.',
                           icon: Icons.notifications_off_outlined,
                         )
@@ -1260,8 +1355,10 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
                                     label: 'Mark All Read',
                                     expanded: false,
                                     variant: AppButtonVariant.outline,
-                                    onPressed: () =>
-                                        _markAllAsRead(visibleMessages),
+                                    onPressed: () => _markAllAsRead(
+                                      visibleMessages,
+                                      visibleMentorReplies,
+                                    ),
                                   ),
                                 ),
                                 const Gap(10),
@@ -1270,13 +1367,43 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
                                     label: 'Clear',
                                     expanded: false,
                                     variant: AppButtonVariant.ghost,
-                                    onPressed: () =>
-                                        _clearAllNotifications(visibleMessages),
+                                    onPressed: () => _clearAllNotifications(
+                                      visibleMessages,
+                                      visibleMentorReplies,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                             const Gap(16),
+                            if (visibleMentorReplies.isNotEmpty) ...[
+                              _NotificationSectionLabel(
+                                label: 'Mentor chat',
+                                count: visibleMentorReplies.length,
+                              ),
+                              const Gap(10),
+                              ...List.generate(visibleMentorReplies.length, (
+                                index,
+                              ) {
+                                final item = visibleMentorReplies[index];
+                                final isUnread = !_readMentorReplyIds.contains(
+                                  item.id,
+                                );
+                                return _MentorReplyNotificationCard(
+                                  item: item,
+                                  isUnread: isUnread,
+                                  onTap: () => _openMentorReply(item),
+                                );
+                              }),
+                              const Gap(6),
+                            ],
+                            if (visibleMessages.isNotEmpty) ...[
+                              _NotificationSectionLabel(
+                                label: 'Cohort updates',
+                                count: visibleMessages.length,
+                              ),
+                              const Gap(10),
+                            ],
                             ...List.generate(visibleMessages.length, (index) {
                               final item = visibleMessages[index];
                               final isUnread = !_readIds.contains(item.id);
@@ -1482,23 +1609,185 @@ class _DirectMessagesScreenState extends ConsumerState<DirectMessagesScreen> {
   }
 }
 
-String? _mentorRouteForDashboard(StudentDashboardSnapshot? dashboard) {
-  final session = _preferredMentorSession(dashboard);
-  if (session == null) return null;
-  final isLive = dashboard?.liveSession?.id == session.id;
-  return isLive
-      ? '/ai-tutor/${session.id}?source=live'
-      : '/ai-tutor/${session.id}';
+class _NotificationSectionLabel extends StatelessWidget {
+  const _NotificationSectionLabel({required this.label, required this.count});
+
+  final String label;
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: AppColors.deepBlue,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 0.2,
+          ),
+        ),
+        const Gap(8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppColors.teal.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: AppColors.tealDark,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-CohortSessionModel? _preferredMentorSession(
-  StudentDashboardSnapshot? dashboard,
-) {
-  if (dashboard == null) return null;
-  return dashboard.liveSession ??
-      dashboard.latestUnlockedSession ??
-      dashboard.nextSession ??
-      dashboard.latestRecordedSession;
+class _MentorReplyNotificationCard extends StatelessWidget {
+  const _MentorReplyNotificationCard({
+    required this.item,
+    required this.isUnread,
+    required this.onTap,
+  });
+
+  final MentorChatMessage item;
+  final bool isUnread;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: AppCard(
+            radius: 28,
+            color: isUnread ? AppColors.teal.withValues(alpha: 0.05) : null,
+            border: Border.all(
+              color: isUnread
+                  ? AppColors.teal.withValues(alpha: 0.28)
+                  : AppColors.deepBlue.withValues(alpha: 0.06),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: AppGradients.accent,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        isUnread
+                            ? Icons.mark_chat_unread_rounded
+                            : Icons.forum_rounded,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const Gap(14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Mentor replied',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isUnread
+                                      ? AppColors.orange.withValues(alpha: 0.14)
+                                      : AppColors.teal.withValues(alpha: 0.14),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  isUnread ? 'New' : 'Read',
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: isUnread
+                                            ? AppColors.orange
+                                            : AppColors.teal,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Gap(6),
+                          Text(
+                            item.body,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: AppColors.mutedForeground,
+                                  height: 1.5,
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Gap(14),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.schedule_rounded,
+                      size: 16,
+                      color: AppColors.mutedForeground,
+                    ),
+                    const Gap(6),
+                    Text(
+                      _formatMentorMessageTime(item.createdAt),
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.mutedForeground,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'Open chat',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AppColors.teal,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Gap(8),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: AppColors.teal,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 MentorChatMessage? _latestMentorChat(List<MentorChatMessage> messages) {
@@ -1905,7 +2194,7 @@ class _MentorIntroBubble extends StatelessWidget {
           ),
         ),
         child: Text(
-          'Mentor replies appear here as you start the conversation. Tap the message box below to send your first message.',
+          'Send your question when you are ready. Mentor replies will appear here in this conversation.',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: isDark ? AppColors.darkForeground : AppColors.deepBlue,
@@ -1939,7 +2228,7 @@ class _MentorEmptyConversation extends StatelessWidget {
           ),
           const Gap(6),
           Text(
-            'Send your first message',
+            'Ask about the class, your code, or what to do next. We will keep the thread here for follow-up.',
             textAlign: TextAlign.center,
             style: Theme.of(
               context,

@@ -330,8 +330,8 @@ class _RecordedPlayerLayout extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                        ),
-                      ),
+                    ),
+                  ),
                 if (player != null && !isLoading && controller != null)
                   Positioned.fill(
                     child: IgnorePointer(
@@ -553,9 +553,7 @@ class _PlayerPill extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isDark
-                      ? Colors.white
-                      : AppColors.foreground,
+                  color: isDark ? Colors.white : AppColors.foreground,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -633,10 +631,7 @@ class _RecordedShortcutCard extends StatelessWidget {
 }
 
 class _SecurePlayerOverlay extends StatefulWidget {
-  const _SecurePlayerOverlay({
-    required this.controller,
-    required this.isDark,
-  });
+  const _SecurePlayerOverlay({required this.controller, required this.isDark});
 
   final YoutubePlayerController controller;
   final bool isDark;
@@ -707,187 +702,188 @@ class _SecurePlayerOverlayState extends State<_SecurePlayerOverlay> {
         onTap: _toggleControls,
         child: ValueListenableBuilder<YoutubePlayerValue>(
           valueListenable: widget.controller,
-        builder: (context, value, _) {
-          final duration = value.metaData.duration;
-          final durationLabel = _formatPlaybackClock(duration);
-          final positionLabel = _formatPlaybackClock(value.position);
-          final canTogglePlayback = value.isReady && !value.hasError;
+          builder: (context, value, _) {
+            final duration = value.metaData.duration;
+            final durationLabel = _formatPlaybackClock(duration);
+            final positionLabel = _formatPlaybackClock(value.position);
+            final canTogglePlayback = value.isReady && !value.hasError;
 
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              AnimatedOpacity(
-                duration: const Duration(milliseconds: 180),
-                opacity: _controlsVisible ? 1 : 0,
-                child: IgnorePointer(
-                  ignoring: !_controlsVisible,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withValues(alpha: 0.08),
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.34),
-                        ],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 14,
-                right: 14,
-                bottom: 14,
-                child: AnimatedOpacity(
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimatedOpacity(
                   duration: const Duration(milliseconds: 180),
                   opacity: _controlsVisible ? 1 : 0,
                   child: IgnorePointer(
                     ignoring: !_controlsVisible,
-                    child: DecoratedBox(
+                    child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(
-                          alpha: widget.isDark ? 0.62 : 0.54,
-                        ),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        child: Row(
-                          children: [
-                            _SecurePlayerControlButton(
-                              icon: Icons.replay_10_rounded,
-                              onTap: !canTogglePlayback
-                                  ? null
-                                  : () {
-                                      _seekBy(
-                                        widget.controller,
-                                        value.position,
-                                        -10,
-                                      );
-                                      _showControls();
-                                    },
-                            ),
-                            const Gap(8),
-                            InkWell(
-                              onTap: !canTogglePlayback
-                                  ? null
-                                  : () {
-                                      if (value.isPlaying) {
-                                        widget.controller.pause();
-                                      } else {
-                                        widget.controller.play();
-                                      }
-                                      _showControls();
-                                    },
-                              borderRadius: BorderRadius.circular(999),
-                              child: Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.1),
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: Icon(
-                                  value.isPlaying
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                  color: Colors.white,
-                                  size: 22,
-                                ),
-                              ),
-                            ),
-                            const Gap(8),
-                            _SecurePlayerControlButton(
-                              icon: Icons.forward_10_rounded,
-                              onTap: !canTogglePlayback
-                                  ? null
-                                  : () {
-                                      _seekBy(
-                                        widget.controller,
-                                        value.position,
-                                        10,
-                                      );
-                                      _showControls();
-                                    },
-                            ),
-                            const Gap(12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    value.isPlaying
-                                        ? 'Playing securely in-app'
-                                        : 'Paused in-app',
-                                    style: Theme.of(context).textTheme.labelMedium
-                                        ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                                  const Gap(3),
-                                  Text(
-                                    '$positionLabel / $durationLabel',
-                                    style: Theme.of(context).textTheme.labelSmall
-                                        ?.copyWith(
-                                          color: Colors.white70,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            InkWell(
-                              onTap: value.isReady ? _toggleFullscreen : null,
-                              borderRadius: BorderRadius.circular(999),
-                              child: Container(
-                                width: 38,
-                                height: 38,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                  shape: BoxShape.circle,
-                                ),
-                                alignment: Alignment.center,
-                                child: Icon(
-                                  value.isFullScreen
-                                      ? Icons.fullscreen_exit_rounded
-                                      : Icons.fullscreen_rounded,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                            ),
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.black.withValues(alpha: 0.08),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.34),
                           ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  bottom: 14,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 180),
+                    opacity: _controlsVisible ? 1 : 0,
+                    child: IgnorePointer(
+                      ignoring: !_controlsVisible,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(
+                            alpha: widget.isDark ? 0.62 : 0.54,
+                          ),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              _SecurePlayerControlButton(
+                                icon: Icons.replay_10_rounded,
+                                onTap: !canTogglePlayback
+                                    ? null
+                                    : () {
+                                        _seekBy(
+                                          widget.controller,
+                                          value.position,
+                                          -10,
+                                        );
+                                        _showControls();
+                                      },
+                              ),
+                              const Gap(8),
+                              InkWell(
+                                onTap: !canTogglePlayback
+                                    ? null
+                                    : () {
+                                        if (value.isPlaying) {
+                                          widget.controller.pause();
+                                        } else {
+                                          widget.controller.play();
+                                        }
+                                        _showControls();
+                                      },
+                                borderRadius: BorderRadius.circular(999),
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    value.isPlaying
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                ),
+                              ),
+                              const Gap(8),
+                              _SecurePlayerControlButton(
+                                icon: Icons.forward_10_rounded,
+                                onTap: !canTogglePlayback
+                                    ? null
+                                    : () {
+                                        _seekBy(
+                                          widget.controller,
+                                          value.position,
+                                          10,
+                                        );
+                                        _showControls();
+                                      },
+                              ),
+                              const Gap(12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      value.isPlaying
+                                          ? 'Playing securely in-app'
+                                          : 'Paused in-app',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelMedium
+                                          ?.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                    ),
+                                    const Gap(3),
+                                    Text(
+                                      '$positionLabel / $durationLabel',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelSmall
+                                          ?.copyWith(
+                                            color: Colors.white70,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              InkWell(
+                                onTap: value.isReady ? _toggleFullscreen : null,
+                                borderRadius: BorderRadius.circular(999),
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Icon(
+                                    value.isFullScreen
+                                        ? Icons.fullscreen_exit_rounded
+                                        : Icons.fullscreen_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 }
 
 class _SecurePlayerControlButton extends StatelessWidget {
-  const _SecurePlayerControlButton({
-    required this.icon,
-    required this.onTap,
-  });
+  const _SecurePlayerControlButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback? onTap;
@@ -1085,10 +1081,12 @@ class _ResourcesLibraryScreenState
                         ),
                         child: TextField(
                           onChanged: (value) => setState(() => _query = value),
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: Colors.white),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(color: Colors.white),
                           decoration: InputDecoration(
-                            hintText: 'Search resources, folders, or file types...',
+                            hintText:
+                                'Search resources, folders, or file types...',
                             hintStyle: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
                                   color: AppColors.darkMutedForeground,
@@ -1189,7 +1187,7 @@ class _ResourcesLibraryScreenState
                         if (folders.isEmpty)
                           AppCard(
                             child: Text(
-                              'No published folders yet. Resources added from the admin dashboard will appear here.',
+                              'No published folders yet. Course resources will appear here once they are ready.',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                           )
@@ -1239,11 +1237,14 @@ class _ResourcesLibraryScreenState
                                       const Gap(6),
                                       Text(
                                         '${folders[index].$2} files',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.copyWith(
-                                          color: _resourceMutedColor(context),
-                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: _resourceMutedColor(
+                                                context,
+                                              ),
+                                            ),
                                       ),
                                     ],
                                   ),
@@ -1276,7 +1277,7 @@ class _ResourcesLibraryScreenState
                           AppEmptyState(
                             title: 'No resources published yet',
                             message:
-                                'The admin dashboard has not published any course files for your enrollment yet.',
+                                'Course files for your enrollment will appear here once they are ready.',
                             icon: Icons.folder_off_rounded,
                           )
                         else if (resources.isEmpty)
@@ -1811,9 +1812,9 @@ class _LibraryMetaChip extends StatelessWidget {
                 const Gap(4),
                 Text(
                   value,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                 ),
               ],
             ),
@@ -1842,7 +1843,9 @@ class _ResourceListTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF111C2E) : Colors.white,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: accent.withValues(alpha: isDark ? 0.3 : 0.12)),
+          border: Border.all(
+            color: accent.withValues(alpha: isDark ? 0.3 : 0.12),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

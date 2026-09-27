@@ -10,6 +10,8 @@ import '../../../core/services/notification_service.dart';
 
 const String readNotificationIdsKey = 'community.readNotificationIds';
 const String hiddenNotificationIdsKey = 'community.hiddenNotificationIds';
+const String readMentorReplyIdsKey = 'mentor.readReplyIds';
+const String hiddenMentorReplyIdsKey = 'mentor.hiddenReplyIds';
 
 Future<Set<String>> loadReadNotificationIds() async {
   final prefs = await SharedPreferences.getInstance();
@@ -19,6 +21,16 @@ Future<Set<String>> loadReadNotificationIds() async {
 Future<Set<String>> loadHiddenNotificationIds() async {
   final prefs = await SharedPreferences.getInstance();
   return prefs.getStringList(hiddenNotificationIdsKey)?.toSet() ?? <String>{};
+}
+
+Future<Set<String>> loadReadMentorReplyIds() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getStringList(readMentorReplyIdsKey)?.toSet() ?? <String>{};
+}
+
+Future<Set<String>> loadHiddenMentorReplyIds() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getStringList(hiddenMentorReplyIdsKey)?.toSet() ?? <String>{};
 }
 
 Future<void> markNotificationRead(CohortMessageModel message) async {
@@ -41,6 +53,18 @@ Future<void> markNotificationsRead(
   await prefs.setStringList(readNotificationIdsKey, readIds.toList());
 }
 
+Future<void> markMentorRepliesRead(Iterable<MentorChatMessage> replies) async {
+  final prefs = await SharedPreferences.getInstance();
+  final readIds =
+      prefs.getStringList(readMentorReplyIdsKey)?.toSet() ?? <String>{};
+  for (final reply in replies) {
+    if (reply.id.trim().isNotEmpty) {
+      readIds.add(reply.id);
+    }
+  }
+  await prefs.setStringList(readMentorReplyIdsKey, readIds.toList());
+}
+
 Future<void> clearNotifications(Iterable<CohortMessageModel> messages) async {
   final prefs = await SharedPreferences.getInstance();
   final hiddenIds =
@@ -53,6 +77,23 @@ Future<void> clearNotifications(Iterable<CohortMessageModel> messages) async {
   }
   await prefs.setStringList(hiddenNotificationIdsKey, hiddenIds.toList());
   await prefs.setStringList(readNotificationIdsKey, readIds.toList());
+}
+
+Future<void> clearMentorReplyNotifications(
+  Iterable<MentorChatMessage> replies,
+) async {
+  final prefs = await SharedPreferences.getInstance();
+  final hiddenIds =
+      prefs.getStringList(hiddenMentorReplyIdsKey)?.toSet() ?? <String>{};
+  final readIds =
+      prefs.getStringList(readMentorReplyIdsKey)?.toSet() ?? <String>{};
+  for (final reply in replies) {
+    if (reply.id.trim().isEmpty) continue;
+    hiddenIds.add(reply.id);
+    readIds.add(reply.id);
+  }
+  await prefs.setStringList(hiddenMentorReplyIdsKey, hiddenIds.toList());
+  await prefs.setStringList(readMentorReplyIdsKey, readIds.toList());
 }
 
 final cohortMessagesProvider =
@@ -80,9 +121,26 @@ final unreadMessagesCountProvider = FutureProvider.autoDispose<int>((
       prefs.getStringList(hiddenNotificationIdsKey)?.toSet() ?? <String>{};
   final readIds =
       prefs.getStringList(readNotificationIdsKey)?.toSet() ?? <String>{};
+  final readMentorReplyIds =
+      prefs.getStringList(readMentorReplyIdsKey)?.toSet() ?? <String>{};
+  final hiddenMentorReplyIds =
+      prefs.getStringList(hiddenMentorReplyIdsKey)?.toSet() ?? <String>{};
   final visibleMessages = messages
       .where((msg) => !hiddenIds.contains(msg.id))
       .toList();
+  final mentorMessages = ref
+      .watch(
+        mentorRequestsProvider(
+          const MentorConversationQuery(sessionId: null, conversationId: null),
+        ),
+      )
+      .maybeWhen(data: (items) => items, orElse: () => <MentorChatMessage>[]);
+  final unreadMentorReplies = mentorMessages.where(
+    (reply) =>
+        reply.isAdmin &&
+        !readMentorReplyIds.contains(reply.id) &&
+        !hiddenMentorReplyIds.contains(reply.id),
+  );
 
   final lastRead = prefs.getInt('lastReadMessages') ?? 0;
   final unreadMessages =
@@ -97,7 +155,7 @@ final unreadMessagesCountProvider = FutureProvider.autoDispose<int>((
           .toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-  final unreadCount = unreadMessages.length;
+  final unreadCount = unreadMessages.length + unreadMentorReplies.length;
 
   if (unreadMessages.isNotEmpty) {
     final latestUnreadAt =
@@ -134,19 +192,18 @@ final mentorReplyNotificationListenerProvider = Provider<void>((ref) {
 
       final latest = adminReplies.first;
       final prefs = await SharedPreferences.getInstance();
+      final readMentorReplyIds =
+          prefs.getStringList(readMentorReplyIdsKey)?.toSet() ?? <String>{};
+      if (readMentorReplyIds.contains(latest.id)) return;
       final lastNotifiedReplyId = prefs.getString(
         'mentor.lastNotifiedAdminReplyId',
       );
       if (lastNotifiedReplyId == latest.id) return;
 
-      final payload = latest.sessionId.trim().isNotEmpty
-          ? '/mentor/${Uri.encodeComponent(latest.sessionId)}'
-          : '/mentor';
-
       await NotificationService().showNotification(
         title: 'Mentor replied',
         body: latest.body,
-        payload: payload,
+        payload: '/mentor',
       );
       await prefs.setString('mentor.lastNotifiedAdminReplyId', latest.id);
     },

@@ -104,6 +104,37 @@ class MentorChatMessage {
   bool get isSending => (status ?? '').toLowerCase() == 'sending';
   bool get isFailed => (status ?? '').toLowerCase() == 'failed';
 
+  MentorChatMessage copyWith({
+    String? id,
+    String? conversationId,
+    String? sessionId,
+    String? body,
+    MentorChatSenderType? senderType,
+    String? senderName,
+    DateTime? createdAt,
+    String? senderEmail,
+    String? status,
+    String? source,
+    String? clientMessageId,
+    bool? isConversationStarter,
+  }) {
+    return MentorChatMessage(
+      id: id ?? this.id,
+      conversationId: conversationId ?? this.conversationId,
+      sessionId: sessionId ?? this.sessionId,
+      body: body ?? this.body,
+      senderType: senderType ?? this.senderType,
+      senderName: senderName ?? this.senderName,
+      createdAt: createdAt ?? this.createdAt,
+      senderEmail: senderEmail ?? this.senderEmail,
+      status: status ?? this.status,
+      source: source ?? this.source,
+      clientMessageId: clientMessageId ?? this.clientMessageId,
+      isConversationStarter:
+          isConversationStarter ?? this.isConversationStarter,
+    );
+  }
+
   factory MentorChatMessage.fromThreadSummary(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {

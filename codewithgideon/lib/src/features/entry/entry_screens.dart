@@ -454,7 +454,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       context.go('/continue-registration');
       return;
     }
-    context.go('/enrollment');
+    context.go('/dashboard');
   }
 
   Future<void> _loginWithGoogle() async {
@@ -1634,7 +1634,7 @@ class EnrollmentGateScreen extends ConsumerWidget {
                 body:
                     'Complete your payment here in the app to unlock your classes and dashboard.',
                 note:
-                    'If you already started checkout, we will keep the same payment reference and let you continue from where you stopped.',
+                    'If you already started checkout, your selected weeks stay saved and you can continue from the dashboard.',
                 primaryLabel: 'Complete Payment',
                 onPrimary: () =>
                     context.go('/payment?mode=initial&returnTo=%2Fenrollment'),
@@ -1918,7 +1918,7 @@ String _friendlyEntryError(Object error) {
   if (raw.contains('permission-denied') ||
       raw.contains('PERMISSION_DENIED') ||
       raw.contains('insufficient permissions')) {
-    return 'We could not save your registration right now because access was denied. Please try again, and if it continues, ask admin to check Firestore permissions.';
+    return 'We could not save your registration right now. Please try again, or contact support if it continues.';
   }
   if (raw.contains('network-request-failed') ||
       raw.contains('SocketException') ||
@@ -1931,7 +1931,7 @@ String _friendlyEntryError(Object error) {
   if (raw.isEmpty) {
     return 'Something went wrong. Please try again.';
   }
-  return raw;
+  return 'We could not complete that step right now. Please try again.';
 }
 
 Future<void> _handleGoogleStudentAuth(
@@ -1970,7 +1970,7 @@ Future<void> _handleGoogleStudentAuth(
     return;
   }
 
-  context.go('/enrollment');
+  context.go('/dashboard');
 }
 
 String? _validateAuthFields({required String email, required String password}) {

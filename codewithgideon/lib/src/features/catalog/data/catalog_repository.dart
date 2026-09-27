@@ -76,9 +76,7 @@ class CatalogRepository {
           description: (data['description'] as String?) ?? '',
         );
       }
-      throw StateError(
-        'Path "$pathId" was not found in Firestore collection "paths".',
-      );
+      throw StateError('This learning path is not available right now.');
     });
   }
 
@@ -117,9 +115,7 @@ class CatalogRepository {
         (course) => course.pathId == pathId && course.isActive,
       );
       if (matches.isNotEmpty) return matches.first;
-      throw StateError(
-        'No active course found in Firestore for path "$pathId".',
-      );
+      throw StateError('This course is not available right now.');
     });
   }
 }
