@@ -248,7 +248,7 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                     ),
                     const Gap(16),
-                    
+
                     AppCard(
                       radius: 28,
                       color: Theme.of(

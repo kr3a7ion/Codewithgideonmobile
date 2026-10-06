@@ -246,10 +246,9 @@ class AppEmptyState extends StatelessWidget {
             const Gap(8),
             Text(
               message,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: mutedColor,
-                height: 1.6,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: mutedColor, height: 1.6),
               textAlign: TextAlign.center,
             ),
             if (action != null) ...[const Gap(16), action!],
@@ -305,10 +304,9 @@ class AppErrorState extends StatelessWidget {
         const Gap(8),
         Text(
           message,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: mutedColor,
-            height: 1.6,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: mutedColor, height: 1.6),
           textAlign: TextAlign.center,
         ),
         if (onRetry != null) ...[
