@@ -1,4 +1,4 @@
-# Code with Gideon — Mobile
+# CodewithGideon — Mobile
 
 Flutter client for [Code with Gideon](https://codewithgideon.com), a coding education platform: course catalog, cohort-based classes, live and recorded sessions, assessments, mentor requests, community spaces, and Paystack payments.
 
