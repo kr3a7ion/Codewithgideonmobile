@@ -1,4 +1,4 @@
-import '../../../core/data/demo_data.dart';
+import '../../../core/models/learning_models.dart';
 import '../../catalog/models/course_model.dart';
 import '../../catalog/models/path_model.dart';
 import '../../cohorts/models/active_cohort_model.dart';

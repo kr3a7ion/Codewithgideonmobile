@@ -15,6 +15,7 @@ import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../entry/state/auth_provider.dart';
 import '../home/state/dashboard_provider.dart';
+import '../student/models/student_profile_model.dart';
 import 'models/payment_checkout_model.dart';
 import 'state/payment_provider.dart';
 
@@ -34,6 +35,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   bool _hasSeededWeeks = false;
   bool _processing = false;
   bool _paymentCompleted = false;
+
+  /// Paystack has charged the card and the app is confirming it with the
+  /// server. Shown as its own step so the student doesn't pay again.
+  bool _confirming = false;
 
   @override
   void initState() {
@@ -231,7 +236,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             ),
           ),
           if (_processing)
-            const Positioned.fill(child: _PaymentProcessingOverlay()),
+            Positioned.fill(
+              child: _PaymentProcessingOverlay(confirming: _confirming),
+            ),
         ],
       ),
     );
@@ -362,6 +369,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
           // says, don't leave the student on a screen that lets them pay
           // again: the webhook credits the payment even if verify fails.
           _paymentCompleted = true;
+          if (mounted) setState(() => _confirming = true);
+          final confirmedMessage = checkout.kind == PaymentFlowKind.topUp
+              ? 'Top up confirmed. Your extra weeks are now available.'
+              : 'Payment confirmed. Welcome to your dashboard.';
           String message;
           try {
             final result = await paymentRepository.verifyPayment(
@@ -372,15 +383,18 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             if (result.needsReview) {
               message = "${result.message} Please don't pay again.";
             } else {
-              message = checkout.kind == PaymentFlowKind.topUp
-                  ? 'Top up confirmed. Your extra weeks are now available.'
-                  : 'Payment confirmed. Welcome to your dashboard.';
+              message = confirmedMessage;
             }
           } catch (_) {
-            message =
-                "Payment received. We're still confirming it, so please don't "
-                'pay again. Your weeks will appear shortly. If they don\'t, '
-                'contact support with reference ${initialized.reference}.';
+            // Paystack's webhook usually credits the weeks within seconds
+            // even when this quick check fails, so wait for that first.
+            final credited = await _waitForCredit(checkout);
+            message = credited
+                ? confirmedMessage
+                : "Payment received. We're still confirming it, so please "
+                      "don't pay again. Your weeks will appear shortly. If "
+                      "they don't, contact support with reference "
+                      '${initialized.reference}.';
           }
           try {
             if (!mounted) return;
@@ -395,7 +409,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             context.go('/dashboard');
           } finally {
             if (mounted) {
-              setState(() => _processing = false);
+              setState(() {
+                _processing = false;
+                _confirming = false;
+              });
             }
           }
         },
@@ -408,6 +425,29 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
       setState(() => _processing = false);
       showAppSnackBar(context, _prettyPaymentError(error));
     }
+  }
+}
+
+/// Checks the student's record for up to 30 seconds to see whether the
+/// payment has been credited (by the webhook) after verify couldn't confirm.
+extension on _PaymentScreenState {
+  Future<bool> _waitForCredit(PaymentCheckoutModel checkout) async {
+    final weeksBefore = checkout.profile.weeksToCommit;
+    final wasPaid = checkout.profile.status == StudentEnrollmentState.complete;
+    for (var attempt = 0; attempt < 6; attempt++) {
+      await Future<void>.delayed(const Duration(seconds: 5));
+      if (!mounted) return false;
+      try {
+        final snapshot = await ref.refresh(dashboardSnapshotProvider.future);
+        final profile = snapshot.profile;
+        final paidNow = profile.status == StudentEnrollmentState.complete;
+        if (!wasPaid && paidNow) return true;
+        if (wasPaid && profile.weeksToCommit > weeksBefore) return true;
+      } catch (_) {
+        // Offline for a moment: try again on the next round.
+      }
+    }
+    return false;
   }
 }
 
@@ -663,7 +703,11 @@ class _PendingPaymentCard extends StatelessWidget {
 }
 
 class _PaymentProcessingOverlay extends StatefulWidget {
-  const _PaymentProcessingOverlay();
+  const _PaymentProcessingOverlay({this.confirming = false});
+
+  /// The card has been charged; show "Confirming your payment" and stop
+  /// cycling through the checkout messages.
+  final bool confirming;
 
   @override
   State<_PaymentProcessingOverlay> createState() =>
@@ -693,7 +737,9 @@ class _PaymentProcessingOverlayState extends State<_PaymentProcessingOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    final stage = _paymentStages[_stage];
+    final stage = widget.confirming
+        ? _confirmingStage
+        : _paymentStages[_stage];
     return IgnorePointer(
       child: Container(
         color: AppColors.deepBlueDark.withValues(alpha: 0.36),
@@ -880,6 +926,12 @@ class _PaymentStageCopy {
   final String title;
   final String message;
 }
+
+const _confirmingStage = _PaymentStageCopy(
+  'Confirming your payment',
+  "Paystack has your payment. We're checking it now. Please keep this "
+      "screen open and don't pay again.",
+);
 
 const _paymentStages = [
   _PaymentStageCopy(

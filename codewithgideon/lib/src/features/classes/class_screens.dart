@@ -3,7 +3,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/state/app_providers.dart';
@@ -11,9 +10,10 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
-import '../../core/data/demo_data.dart';
+import '../../core/models/learning_models.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
+import '../recorded/data/watch_progress_repository.dart';
 
 class ClassListScreen extends ConsumerWidget {
   const ClassListScreen({super.key});
@@ -23,6 +23,12 @@ class ClassListScreen extends ConsumerWidget {
     final activeTab = ref.watch(classTabProvider);
     final search = ref.watch(classSearchProvider).trim().toLowerCase();
     final dashboardState = ref.watch(dashboardSnapshotProvider);
+    final watchProgress = ref
+        .watch(watchProgressProvider)
+        .maybeWhen(
+          data: (items) => items,
+          orElse: () => const <String, WatchProgress>{},
+        );
 
     return dashboardState.when(
       loading: () => const DoubleBackToExitScope(
@@ -208,6 +214,7 @@ class ClassListScreen extends ConsumerWidget {
                               child:
                                   _ClassListCard(
                                         session: session,
+                                        progress: watchProgress[session.id],
                                         onTap: () => context.push(
                                           '/classes/${session.id}',
                                         ),
@@ -452,10 +459,17 @@ class ClassDetailsScreen extends ConsumerWidget {
 }
 
 class _ClassListCard extends StatelessWidget {
-  const _ClassListCard({required this.session, required this.onTap});
+  const _ClassListCard({
+    required this.session,
+    required this.onTap,
+    this.progress,
+  });
 
   final CohortSessionModel session;
   final VoidCallback onTap;
+
+  /// How much of the recording the student has watched, if started.
+  final WatchProgress? progress;
 
   @override
   Widget build(BuildContext context) {
@@ -492,7 +506,20 @@ class _ClassListCard extends StatelessWidget {
                           tint: AppColors.teal,
                           icon: Icons.videocam_rounded,
                         ),
-                      if (recordingReady)
+                      if (recordingReady && (progress?.completed ?? false))
+                        _ClassBadge(
+                          label: 'Watched',
+                          tint: AppColors.teal,
+                          icon: Icons.check_circle_rounded,
+                        )
+                      else if (recordingReady && (progress?.isStarted ?? false))
+                        _ClassBadge(
+                          label:
+                              '${(progress!.fraction * 100).round()}% watched',
+                          tint: AppColors.orange,
+                          icon: Icons.play_circle_rounded,
+                        )
+                      else if (recordingReady)
                         _ClassBadge(
                           label: 'Recording ready',
                           tint: AppColors.orange,
@@ -535,7 +562,7 @@ class _ClassListCard extends StatelessWidget {
               children: [
                 _ClassMeta(
                   label: 'Schedule',
-                  value: countdown ?? _formatDateTime(session.startsAt),
+                  value: countdown ?? formatSessionWhen(session),
                   icon: countdown != null
                       ? Icons.timelapse_outlined
                       : Icons.calendar_month_outlined,
@@ -1073,10 +1100,6 @@ String _statusLabel(CohortSessionModel session) {
   };
 }
 
-String _formatDateTime(DateTime value) {
-  return DateFormat('EEE, MMM d • h:mm a').format(value);
-}
-
 Future<void> _openJoinLink(BuildContext context, String url) async {
   final uri = Uri.tryParse(url);
   if (uri == null) {
@@ -1209,7 +1232,7 @@ Color _muted(BuildContext context) {
 }
 
 extension on CohortSessionModel {
-  bool isLive(DateTime now) => !startsAt.isAfter(now) && !endsAt.isBefore(now);
+  bool isLive(DateTime now) => isSessionLive(this, now: now);
 }
 
 Color _statusTone(SessionStatusSnapshot status) {

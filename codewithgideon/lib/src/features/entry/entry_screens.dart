@@ -1650,7 +1650,7 @@ class EnrollmentGateScreen extends ConsumerWidget {
                 body:
                     'Complete your registration details inside the app before payment and dashboard access.',
                 note:
-                    'What you get: live classes, recorded lessons, AI tutor support, community access, and industry certificates.',
+                    'What you get: live classes, recorded lessons, mentor support, community access, and industry certificates.',
                 primaryLabel: 'Continue Registration',
                 onPrimary: () => context.go('/continue-registration'),
                 secondaryLabel: 'Back',

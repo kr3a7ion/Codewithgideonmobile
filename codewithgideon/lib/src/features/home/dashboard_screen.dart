@@ -1987,14 +1987,7 @@ List<CourseSyllabusWeek> _resolvedSyllabusItems(
   StudentDashboardSnapshot snapshot,
 ) {
   final syllabusItems = snapshot.course.syllabus;
-  if (syllabusItems.isEmpty) {
-    return _dummySyllabusItems(snapshot);
-  }
-
-  if (syllabusItems.length == 1 && snapshot.totalProgramWeeks > 1) {
-    return _dummySyllabusItems(snapshot);
-  }
-
+  if (syllabusItems.isEmpty) return _plainWeeks(snapshot);
   return syllabusItems;
 }
 
@@ -2162,210 +2155,29 @@ String _initials(String fullName) {
 String _formatDateLabel(CohortSessionModel session) {
   final now = DateTime.now();
   if (_isSessionLive(session, now)) return 'Join available now';
-  return DateFormat('MMM d • h:mm a').format(session.startsAt);
+  return formatSessionWhen(session, weekday: false);
 }
 
 bool _isSessionLive(CohortSessionModel session, DateTime now) {
-  return !session.startsAt.isAfter(now) && !session.endsAt.isBefore(now);
+  return isSessionLive(session, now: now);
 }
 
 String _formatNaira(int amount) {
   return '₦${NumberFormat.decimalPattern().format(amount)}';
 }
 
-List<CourseSyllabusWeek> _dummySyllabusItems(
-  StudentDashboardSnapshot snapshot,
-) {
-  final title = snapshot.course.title.toLowerCase();
-  final weeks = snapshot.totalProgramWeeks.clamp(4, 12);
-
-  if (title.contains('flutter')) {
-    return const [
-      CourseSyllabusWeek(
-        week: 1,
-        title: 'Weeks 1–2: Foundations',
-        topics: [
-          'Flutter overview & setup',
-          'Dart fundamentals',
-          'Widgets & UI basics',
-          'Stateless vs Stateful widgets',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 3,
-        title: 'Weeks 3–4: UI, Input & Navigation',
-        topics: [
-          'Layout system',
-          'Forms & validation',
-          'Navigation & data passing',
-          'Local state with setState',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 5,
-        title: 'Weeks 5–6: Backend & Authentication',
-        topics: [
-          'Firebase setup',
-          'Authentication',
-          'Firestore basics',
-          'Real-time data',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 7,
-        title: 'Weeks 7–8: State Management & Architecture',
-        topics: [
-          'Why state management',
-          'Structured state flow',
-          'Refactoring apps',
-          'Cleaner architecture',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 9,
-        title: 'Weeks 9–10: APIs & Local Storage',
-        topics: [
-          'REST APIs',
-          'HTTP requests',
-          'Error handling',
-          'Hive local storage',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 11,
-        title: 'Weeks 11–12: Deployment & Final Project',
-        topics: [
-          'Debugging & optimization',
-          'Android builds',
-          'Play Store requirements',
-          'Final app build & presentation',
-        ],
-      ),
-    ].take(weeks).toList();
-  }
-
-  if (title.contains('wordpress') || title.contains('web')) {
-    return const [
-      CourseSyllabusWeek(
-        week: 1,
-        title: 'Week 1: WordPress Foundations',
-        topics: [
-          'What is WordPress',
-          'WordPress.com vs WordPress.org',
-          'Domain & hosting basics',
-          'Dashboard overview',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 2,
-        title: 'Week 2: Themes & Site Structure',
-        topics: [
-          'Choosing & installing themes',
-          'Customizing site identity',
-          'Pages, menus & navigation',
-          'Permalinks & settings',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 3,
-        title: 'Week 3: Content Creation & Blogging',
-        topics: [
-          'Posts vs Pages',
-          'Blogging basics',
-          'Media handling',
-          'Categories, tags & metadata',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 4,
-        title: 'Week 4: Plugins & Functionality',
-        topics: [
-          'Essential plugins',
-          'Contact forms',
-          'SEO basics',
-          'Security & backups',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 5,
-        title: 'Week 5: Business Websites',
-        topics: [
-          'Landing pages',
-          'Service websites',
-          'Portfolio & company sites',
-          'Client-ready structure',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 6,
-        title: 'Week 6: Deployment & Monetization',
-        topics: [
-          'Going live',
-          'Maintenance basics',
-          'Pricing client jobs',
-          'Final website project',
-        ],
-      ),
-    ].take(weeks).toList();
-  }
-
-  if (title.contains('ai')) {
-    return const [
-      CourseSyllabusWeek(
-        week: 1,
-        title: 'Module 1: AI for Developers',
-        topics: [
-          'Prompting basics',
-          'Asking good technical questions',
-          'Verification mindset',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 2,
-        title: 'Module 2: AI for Coding & Debugging',
-        topics: ['Explaining errors', 'Refactoring code', 'Logic comparison'],
-      ),
-      CourseSyllabusWeek(
-        week: 3,
-        title: 'Module 3: AI for UI & UX',
-        topics: [
-          'Layout suggestions',
-          'Color & design assistance',
-          'Accessibility checks',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 4,
-        title: 'Module 4: AI for Project Planning',
-        topics: [
-          'Breaking features into tasks',
-          'Estimating scope',
-          'Documentation help',
-        ],
-      ),
-      CourseSyllabusWeek(
-        week: 5,
-        title: 'Module 5: AI for Content & Deployment',
-        topics: ['App descriptions', 'Website copy', 'Release notes'],
-      ),
-      CourseSyllabusWeek(
-        week: 6,
-        title: 'Module 6: Ethics & Responsible Use',
-        topics: [
-          'Avoiding dependency',
-          'Verification mindset',
-          'Learning vs copying',
-        ],
-      ),
-    ].take(weeks).toList();
-  }
-
+/// No outline saved for the course yet: show plain weeks rather than made-up
+/// topics. Gideon fills the real outline in Admin -> Courses.
+List<CourseSyllabusWeek> _plainWeeks(StudentDashboardSnapshot snapshot) {
+  final weeks = snapshot.totalProgramWeeks < 1
+      ? 1
+      : snapshot.totalProgramWeeks;
   return List<CourseSyllabusWeek>.generate(
     weeks,
     (index) => CourseSyllabusWeek(
       week: index + 1,
       title: 'Week ${index + 1}',
-      topics: ['Core syllabus module ${index + 1}'],
+      topics: const [],
     ),
   );
 }

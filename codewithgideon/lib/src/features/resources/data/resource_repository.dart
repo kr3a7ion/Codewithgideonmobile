@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../core/data/demo_data.dart';
+import '../../../core/models/learning_models.dart';
 import '../../../core/network/api_client.dart';
 import '../../cohorts/models/cohort_session_model.dart';
 import '../../student/models/student_profile_model.dart';

@@ -13,6 +13,7 @@ class CommunitySpacesRepository {
 
   Stream<List<CommunitySpaceModel>> watchSpaces({
     required Set<String> cohortTokens,
+    required String studentCohortKey,
     required String pathId,
   }) {
     return _firebaseFirestore
@@ -27,9 +28,13 @@ class CommunitySpacesRepository {
                   .map(CommunitySpaceModel.fromFirestore)
                   .where((space) => space.isPublished)
                   .where((space) {
-                    final matchesCohort =
-                        space.cohortId == null ||
-                        cohortTokens.contains(space.cohortId);
+                    // A space for one intake only shows to that intake, the
+                    // same rule as the website.
+                    final intake = space.cohortKey;
+                    final matchesCohort = intake != null
+                        ? intake == studentCohortKey
+                        : space.cohortId == null ||
+                              cohortTokens.contains(space.cohortId);
                     final matchesPath =
                         space.pathId == null || space.pathId == pathId;
                     return matchesCohort && matchesPath;
@@ -83,6 +88,10 @@ final communitySpacesProvider =
           .watch(communitySpacesRepositoryProvider)
           .watchSpaces(
             cohortTokens: cohortTokens,
+            studentCohortKey:
+                (dashboard.profile.cohortKey ?? '').trim().isNotEmpty
+                ? dashboard.profile.cohortKey!.trim()
+                : dashboard.activeCohort.cohortKey,
             pathId: dashboard.profile.pathId,
           );
     });
