@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
@@ -9,7 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
-import '../../core/data/demo_data.dart';
+import '../../core/models/learning_models.dart';
 import '../../core/services/playback_security_service.dart';
 import '../../core/state/app_providers.dart';
 import '../../core/theme/app_theme.dart';
@@ -18,6 +17,7 @@ import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
+import 'data/watch_progress_repository.dart';
 
 class RecordedPlayerScreen extends ConsumerWidget {
   const RecordedPlayerScreen({super.key, required this.lessonId});
@@ -90,7 +90,7 @@ class RecordedPlayerScreen extends ConsumerWidget {
   }
 }
 
-class _ProtectedRecordedPlayer extends StatefulWidget {
+class _ProtectedRecordedPlayer extends ConsumerStatefulWidget {
   const _ProtectedRecordedPlayer({
     required this.session,
     required this.relatedResources,
@@ -100,21 +100,42 @@ class _ProtectedRecordedPlayer extends StatefulWidget {
   final List<CourseResource> relatedResources;
 
   @override
-  State<_ProtectedRecordedPlayer> createState() =>
+  ConsumerState<_ProtectedRecordedPlayer> createState() =>
       _ProtectedRecordedPlayerState();
 }
 
-class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
+class _ProtectedRecordedPlayerState
+    extends ConsumerState<_ProtectedRecordedPlayer> {
+  static const _saveEvery = Duration(seconds: 10);
+
   YoutubePlayerController? _controller;
   bool _isLoading = true;
   bool _isPlayable = true;
   bool _isFullscreen = false;
   bool _didEnableSecurePlayback = false;
 
+  // Watch progress, shared with the website.
+  WatchProgressRepository? _progressRepository;
+  String? _uid;
+  WatchProgress? _savedAtOpen;
+  bool _resumed = false;
+  bool _completed = false;
+  int _position = 0;
+  int _duration = 0;
+  int _lastSavedPosition = -1;
+  DateTime _lastSavedAt = DateTime.fromMillisecondsSinceEpoch(0);
+  PlayerState _lastPlayerState = PlayerState.unknown;
+  bool _disposing = false;
+
   @override
   void initState() {
     super.initState();
     _enableSecurePlayback();
+    // Kept here because ref can't be used once the screen is disposed, and the
+    // last position is saved then.
+    _progressRepository = ref.read(watchProgressRepositoryProvider);
+    _uid = ref.read(authControllerProvider).session?.uid;
+
     final recordingUri = Uri.tryParse(widget.session.recordingUrl);
     final videoId = recordingUri == null
         ? null
@@ -150,14 +171,97 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
 
   void _onPlayerStateChange() {
     final controller = _controller;
-    if (controller != null && controller.value.isReady && _isLoading) {
+    if (controller == null) return;
+    if (controller.value.isReady && _isLoading) {
       setState(() => _isLoading = false);
     }
+
+    final playerState = controller.value.playerState;
+    final position = controller.value.position.inSeconds;
+    final duration = controller.metadata.duration.inSeconds;
+    if (duration > 0) _duration = duration;
+    if (position > 0) _position = position;
+
+    _resumeOnce(controller);
+
+    final stateChanged = playerState != _lastPlayerState;
+    _lastPlayerState = playerState;
+    if (playerState == PlayerState.playing) {
+      if (DateTime.now().difference(_lastSavedAt) >= _saveEvery) {
+        _saveProgress();
+      }
+    } else if (stateChanged &&
+        (playerState == PlayerState.paused ||
+            playerState == PlayerState.ended)) {
+      _saveProgress(completed: playerState == PlayerState.ended ? true : null);
+    }
+  }
+
+  /// Picks up where the student stopped last time, unless they had nearly
+  /// finished or already watched it.
+  void _resumeOnce(YoutubePlayerController controller) {
+    if (_resumed || !controller.value.isReady) return;
+    _resumed = true;
+    // Hold off the first automatic save so it can't record 0 s before the
+    // jump back to the saved spot has happened.
+    _lastSavedAt = DateTime.now();
+    final saved = _savedAtOpen;
+    if (saved == null || saved.completed) return;
+    final nearEnd = saved.duration > 0 && saved.position >= saved.duration - 15;
+    if (saved.position > 15 && !nearEnd) {
+      controller.seekTo(Duration(seconds: saved.position));
+    }
+  }
+
+  void _saveProgress({bool? completed}) {
+    final uid = _uid;
+    final repository = _progressRepository;
+    if (uid == null || repository == null) return;
+    final reachedEnd = _duration > 0 && _position / _duration >= watchedAt;
+    final isCompleted = completed ?? (_completed || reachedEnd);
+    if (_position == _lastSavedPosition && isCompleted == _completed) return;
+    _lastSavedAt = DateTime.now();
+    _lastSavedPosition = _position;
+    if (isCompleted != _completed && mounted && !_disposing) {
+      setState(() => _completed = isCompleted);
+    } else {
+      _completed = isCompleted;
+    }
+    repository
+        .save(
+          uid: uid,
+          sessionId: widget.session.id,
+          position: _position,
+          duration: _duration,
+          completed: isCompleted,
+        )
+        .catchError((Object _) {
+          // Offline or not allowed: the student can keep watching.
+        });
+  }
+
+  void _toggleWatched() {
+    final watched = !_completed;
+    if (!watched) _position = 0;
+    if (watched && _duration > 0) _position = _duration;
+    _saveProgress(completed: watched);
+    showAppSnackBar(
+      context,
+      watched ? 'Marked as watched.' : 'Marked as not watched.',
+    );
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _disposing = true;
+    final controller = _controller;
+    if (controller != null) {
+      final position = controller.value.position.inSeconds;
+      if (position > 0) _position = position;
+      _saveProgress();
+      controller.removeListener(_onPlayerStateChange);
+      controller.dispose();
+    }
     if (_didEnableSecurePlayback) {
       PlaybackSecurityService.disableSecurePlayback();
     }
@@ -170,6 +274,20 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
     final isDark = theme.brightness == Brightness.dark;
     final status = resolveSessionStatus(widget.session);
     final controller = _controller;
+    // Saved progress can arrive after the screen opens; use it until the
+    // player has had its chance to resume.
+    final saved = progressFor(ref, widget.session.id);
+    if (saved != null && _savedAtOpen == null && !_resumed) {
+      _savedAtOpen = saved;
+      _completed = saved.completed;
+      _position = saved.position;
+      _duration = saved.duration;
+    }
+    final watchedFraction = _completed
+        ? 1.0
+        : _duration > 0
+        ? (_position / _duration).clamp(0.0, 1.0)
+        : 0.0;
 
     final player = controller == null
         ? null
@@ -200,6 +318,9 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
         isLoading: _isLoading,
         player: null,
         controller: controller,
+        isWatched: _completed,
+        watchedFraction: watchedFraction,
+        onToggleWatched: _toggleWatched,
       );
     }
 
@@ -227,6 +348,9 @@ class _ProtectedRecordedPlayerState extends State<_ProtectedRecordedPlayer> {
           player: playerWidget,
           isFullscreen: _isFullscreen,
           controller: controller,
+          isWatched: _completed,
+          watchedFraction: watchedFraction,
+          onToggleWatched: _toggleWatched,
         );
       },
     );
@@ -243,6 +367,9 @@ class _RecordedPlayerLayout extends StatelessWidget {
     required this.isLoading,
     required this.player,
     required this.controller,
+    required this.isWatched,
+    required this.watchedFraction,
+    required this.onToggleWatched,
     this.isFullscreen = false,
   });
 
@@ -255,6 +382,9 @@ class _RecordedPlayerLayout extends StatelessWidget {
   final Widget? player;
   final YoutubePlayerController? controller;
   final bool isFullscreen;
+  final bool isWatched;
+  final double watchedFraction;
+  final VoidCallback onToggleWatched;
 
   @override
   Widget build(BuildContext context) {
@@ -417,6 +547,12 @@ class _RecordedPlayerLayout extends StatelessWidget {
                         height: 1.65,
                       ),
                     ),
+                    const Gap(16),
+                    _WatchProgressRow(
+                      isWatched: isWatched,
+                      fraction: watchedFraction,
+                      onToggle: onToggleWatched,
+                    ),
                     const Gap(14),
                     Container(
                       width: double.infinity,
@@ -452,7 +588,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
                           accent: AppColors.purple,
                           title: 'Mentor',
                           subtitle: 'Ask a follow up',
-                          onTap: () => context.push('/ai-tutor/${session.id}'),
+                          onTap: () => context.push('/mentor/${session.id}'),
                         ),
                       ],
                     ),
@@ -514,6 +650,77 @@ class _RecordedPlayerLayout extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "45% watched · Mark as watched", or "Watched" with an undo.
+class _WatchProgressRow extends StatelessWidget {
+  const _WatchProgressRow({
+    required this.isWatched,
+    required this.fraction,
+    required this.onToggle,
+  });
+
+  final bool isWatched;
+  final double fraction;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final percent = (fraction * 100).round();
+    final label = isWatched
+        ? 'Watched'
+        : percent > 0
+        ? '$percent% watched'
+        : 'Not started';
+    return AppCard(
+      radius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isWatched
+                    ? Icons.check_circle_rounded
+                    : Icons.play_circle_outline_rounded,
+                color: isWatched ? AppColors.teal : AppColors.deepBlueLight,
+                size: 20,
+              ),
+              const Gap(10),
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onToggle,
+                child: Text(
+                  isWatched ? 'Mark as not watched' : 'Mark as watched',
+                ),
+              ),
+            ],
+          ),
+          const Gap(8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: isWatched ? 1 : fraction,
+              minHeight: 6,
+              color: AppColors.teal,
+              backgroundColor: isDark
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : AppColors.muted,
+            ),
+          ),
         ],
       ),
     );
@@ -1410,268 +1617,6 @@ Future<void> _openResource(
   final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!launched && context.mounted) {
     showAppSnackBar(context, 'Could not open ${resource.name} right now.');
-  }
-}
-
-class AiTutorScreen extends ConsumerStatefulWidget {
-  const AiTutorScreen({super.key, required this.lessonId});
-
-  final String lessonId;
-
-  @override
-  ConsumerState<AiTutorScreen> createState() => _AiTutorScreenState();
-}
-
-class _AiTutorScreenState extends ConsumerState<AiTutorScreen> {
-  final _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  Future<void> _send() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    _controller.clear();
-    await ref
-        .read(aiTutorChatProvider(widget.lessonId).notifier)
-        .sendMessage(text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(aiTutorChatProvider(widget.lessonId));
-
-    return AppScreen(
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
-          children: [
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AppColors.purple, Color(0xFF6D28D9)],
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 20),
-              child: PremiumPageHeader(
-                title: 'AI Tutor',
-                subtitle: 'Always ready to help',
-                leading: PremiumIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  onTap: () => context.pop(),
-                  isDark: true,
-                ),
-                trailing: Container(
-                  width: 42,
-                  height: 42,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.auto_awesome_rounded,
-                    color: AppColors.purple,
-                  ),
-                ),
-                onDark: true,
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(18),
-                children: [
-                  for (final message in state.messages)
-                    Align(
-                      alignment: message.isUser
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(16),
-                        constraints: const BoxConstraints(maxWidth: 310),
-                        decoration: BoxDecoration(
-                          gradient: message.isUser
-                              ? const LinearGradient(
-                                  colors: [
-                                    AppColors.deepBlue,
-                                    AppColors.deepBlueLight,
-                                  ],
-                                )
-                              : null,
-                          color: message.isUser ? null : Colors.white,
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(24),
-                            topRight: const Radius.circular(24),
-                            bottomLeft: Radius.circular(
-                              message.isUser ? 24 : 8,
-                            ),
-                            bottomRight: Radius.circular(
-                              message.isUser ? 8 : 24,
-                            ),
-                          ),
-                          boxShadow: message.isUser ? null : AppShadows.card,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (!message.isUser) ...[
-                              Row(
-                                children: [
-                                  const Icon(
-                                    Icons.auto_awesome_rounded,
-                                    size: 16,
-                                    color: AppColors.purple,
-                                  ),
-                                  const Gap(6),
-                                  Text(
-                                    'AI Tutor',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelMedium
-                                        ?.copyWith(
-                                          color: AppColors.purple,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                                ],
-                              ),
-                              const Gap(8),
-                            ],
-                            Text(
-                              message.text,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: message.isUser
-                                        ? Colors.white
-                                        : AppColors.foreground,
-                                    height: 1.6,
-                                  ),
-                            ),
-                            const Gap(8),
-                            Text(
-                              message.time,
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: message.isUser
-                                        ? Colors.white70
-                                        : AppColors.mutedForeground,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (state.isTyping)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: AppShadows.card,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: List.generate(
-                            3,
-                            (index) =>
-                                Container(
-                                      width: 8,
-                                      height: 8,
-                                      margin: const EdgeInsets.symmetric(
-                                        horizontal: 3,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade400,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    )
-                                    .animate(
-                                      onPlay: (controller) =>
-                                          controller.repeat(),
-                                    )
-                                    .fade(
-                                      delay: (index * 120).ms,
-                                      begin: 0.2,
-                                      end: 1,
-                                    )
-                                    .scale(delay: (index * 120).ms),
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (state.messages.length == 1) ...[
-                    const Gap(12),
-                    Text(
-                      'Quick questions:',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const Gap(10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          for (final item in DemoData.quickTutorQuestions) ...[
-                            OutlinedButton(
-                              onPressed: () => _controller.text = item,
-                              child: Text(item),
-                            ),
-                            const Gap(8),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 10, 22, 24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: 'Ask me anything...',
-                      ),
-                    ),
-                  ),
-                  const Gap(10),
-                  InkWell(
-                    onTap: _send,
-                    borderRadius: BorderRadius.circular(18),
-                    child: Container(
-                      width: 54,
-                      height: 54,
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [AppColors.purple, Color(0xFF6D28D9)],
-                        ),
-                        borderRadius: BorderRadius.all(Radius.circular(18)),
-                      ),
-                      child: const Icon(
-                        Icons.send_rounded,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

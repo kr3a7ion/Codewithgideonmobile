@@ -1,4 +1,4 @@
-import '../../../core/data/demo_data.dart';
+import '../../../core/models/learning_models.dart';
 import '../../../core/network/api_client.dart';
 import '../../catalog/data/catalog_repository.dart';
 import '../../cohorts/data/cohort_repository.dart';

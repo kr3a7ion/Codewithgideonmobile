@@ -9,6 +9,7 @@ class CommunitySpaceModel {
     required this.isPublished,
     required this.sortOrder,
     this.cohortId,
+    this.cohortKey,
     this.cohortLabel,
     this.pathId,
     this.roomUrl,
@@ -24,6 +25,9 @@ class CommunitySpaceModel {
   final bool isPublished;
   final int sortOrder;
   final String? cohortId;
+
+  /// Set when the space is for one intake only, e.g. "FLUTTER-2026-09".
+  final String? cohortKey;
   final String? cohortLabel;
   final String? pathId;
   final String? roomUrl;
@@ -44,6 +48,7 @@ class CommunitySpaceModel {
       isPublished: data['isPublished'] != false,
       sortOrder: (data['sortOrder'] as num?)?.toInt() ?? 0,
       cohortId: _cleanString(data['cohortId']),
+      cohortKey: _cleanString(data['cohortKey']),
       cohortLabel: _cleanString(data['cohortLabel']),
       pathId: _cleanString(data['pathId']),
       roomUrl: _cleanString(data['roomUrl']),

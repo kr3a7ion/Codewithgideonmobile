@@ -12,6 +12,7 @@ class CohortSessionModel {
     required this.recordingUrl,
     required this.notes,
     required this.isPublished,
+    this.timeTba = false,
   });
 
   final String id;
@@ -26,6 +27,10 @@ class CohortSessionModel {
   final String recordingUrl;
   final String notes;
   final bool isPublished;
+
+  /// The day is set but the hour isn't yet ("Time to be announced" in
+  /// admin). [startsAt] then holds midday on that day.
+  final bool timeTba;
 
   bool get hasJoinUrl => joinUrl.trim().isNotEmpty;
   bool get hasRecordingUrl => recordingUrl.trim().isNotEmpty;

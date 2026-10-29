@@ -1,4 +1,4 @@
-import 'package:codewithgideon/src/core/data/demo_data.dart';
+import 'package:codewithgideon/src/core/models/learning_models.dart';
 import 'package:codewithgideon/src/features/catalog/models/course_model.dart';
 import 'package:codewithgideon/src/features/catalog/models/path_model.dart';
 import 'package:codewithgideon/src/features/cohorts/models/active_cohort_model.dart';
@@ -61,8 +61,8 @@ void main() {
         seasonKey: '2026-03',
       ),
       unlockedSessions: const [],
-      recordedLessons: DemoData.recordedLessons,
-      libraryResources: DemoData.libraryResources,
+      recordedLessons: const <RecordedLesson>[],
+      libraryResources: const <CourseResource>[],
     );
   }
 

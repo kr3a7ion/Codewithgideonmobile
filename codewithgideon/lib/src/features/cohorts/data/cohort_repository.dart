@@ -195,6 +195,7 @@ class CohortRepository {
             '',
         notes: (data['notes'] as String?) ?? '',
         isPublished: (data['isPublished'] as bool?) ?? false,
+        timeTba: data['timeTba'] == true,
       );
     }).toList()..sort((a, b) => a.startsAt.compareTo(b.startsAt));
   }
