@@ -127,6 +127,14 @@ class _ProtectedRecordedPlayerState
   PlayerState _lastPlayerState = PlayerState.unknown;
   bool _disposing = false;
 
+  /// True once the saved progress has loaded (or failed to), so resuming
+  /// waits for it instead of starting from 0.
+  bool _progressLoaded = false;
+
+  /// After "Mark as not watched", don't let the 90% rule mark it watched
+  /// again until playback has gone back below that point.
+  bool _holdAutoComplete = false;
+
   @override
   void initState() {
     super.initState();
@@ -181,6 +189,11 @@ class _ProtectedRecordedPlayerState
     final duration = controller.metadata.duration.inSeconds;
     if (duration > 0) _duration = duration;
     if (position > 0) _position = position;
+    if (_holdAutoComplete &&
+        _duration > 0 &&
+        _position / _duration < watchedAt) {
+      _holdAutoComplete = false;
+    }
 
     _resumeOnce(controller);
 
@@ -200,7 +213,7 @@ class _ProtectedRecordedPlayerState
   /// Picks up where the student stopped last time, unless they had nearly
   /// finished or already watched it.
   void _resumeOnce(YoutubePlayerController controller) {
-    if (_resumed || !controller.value.isReady) return;
+    if (_resumed || !controller.value.isReady || !_progressLoaded) return;
     _resumed = true;
     // Hold off the first automatic save so it can't record 0 s before the
     // jump back to the saved spot has happened.
@@ -217,7 +230,13 @@ class _ProtectedRecordedPlayerState
     final uid = _uid;
     final repository = _progressRepository;
     if (uid == null || repository == null) return;
-    final reachedEnd = _duration > 0 && _position / _duration >= watchedAt;
+    // Before resuming, the player may still be at 0 s; an automatic save then
+    // would wipe the saved position.
+    if (completed == null && !_resumed) return;
+    final reachedEnd =
+        !_holdAutoComplete &&
+        _duration > 0 &&
+        _position / _duration >= watchedAt;
     final isCompleted = completed ?? (_completed || reachedEnd);
     if (_position == _lastSavedPosition && isCompleted == _completed) return;
     _lastSavedAt = DateTime.now();
@@ -242,7 +261,13 @@ class _ProtectedRecordedPlayerState
 
   void _toggleWatched() {
     final watched = !_completed;
-    if (!watched) _position = 0;
+    if (!watched) {
+      // Start the recording over, so its position doesn't count as watched
+      // again on the next save.
+      _position = 0;
+      _holdAutoComplete = true;
+      _controller?.seekTo(Duration.zero);
+    }
     if (watched && _duration > 0) _position = _duration;
     _saveProgress(completed: watched);
     showAppSnackBar(
@@ -276,12 +301,26 @@ class _ProtectedRecordedPlayerState
     final controller = _controller;
     // Saved progress can arrive after the screen opens; use it until the
     // player has had its chance to resume.
-    final saved = progressFor(ref, widget.session.id);
+    final progressState = ref.watch(watchProgressProvider);
+    final progressReady = progressState.hasValue || progressState.hasError;
+    final saved = progressState.maybeWhen(
+      data: (items) => items[widget.session.id],
+      orElse: () => null,
+    );
     if (saved != null && _savedAtOpen == null && !_resumed) {
       _savedAtOpen = saved;
       _completed = saved.completed;
       _position = saved.position;
       _duration = saved.duration;
+    }
+    if (progressReady && !_progressLoaded) {
+      _progressLoaded = true;
+      // The player may already be ready and waiting; resume after this frame.
+      if (controller != null && controller.value.isReady) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _resumeOnce(controller);
+        });
+      }
     }
     final watchedFraction = _completed
         ? 1.0
