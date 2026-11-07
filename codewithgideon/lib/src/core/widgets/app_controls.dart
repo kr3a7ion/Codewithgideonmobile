@@ -10,8 +10,6 @@ import 'states/app_state_widgets.dart';
 
 enum AppButtonVariant { primary, secondary, outline, ghost, danger }
 
-const _brandLogoAsset = 'assets/branding/codewithgideon_logo.png';
-
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -412,32 +410,6 @@ class _BackdropOrb extends StatelessWidget {
   }
 }
 
-class BrandLogo extends StatelessWidget {
-  const BrandLogo({
-    super.key,
-    this.size = 136,
-    this.semanticLabel = 'CodeWithGideon logo',
-  });
-
-  final double size;
-  final String semanticLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: semanticLabel,
-      image: true,
-      child: Image.asset(
-        _brandLogoAsset,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-      ),
-    );
-  }
-}
-
 class BrandMark extends StatelessWidget {
   const BrandMark({
     super.key,
@@ -608,8 +580,17 @@ class BrandWordmark extends StatelessWidget {
     final fontSize = height * 0.92;
     return Semantics(
       label: 'CodeWithGideon',
-      child: Text(
-        'CodeWithGideon',
+      // Two-tone like the official logo: "Gideon" in the brand teal.
+      child: Text.rich(
+        const TextSpan(
+          text: 'CodeWith',
+          children: [
+            TextSpan(
+              text: 'Gideon',
+              style: TextStyle(color: Color(0xFF1FBEC3)),
+            ),
+          ],
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(

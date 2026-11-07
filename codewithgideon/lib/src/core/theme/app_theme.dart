@@ -12,10 +12,12 @@ class AppColors {
   static const tealDark = Color(0xFF136B72);
   static const orange = Color(0xFFFF7A45);
   static const orangeLight = Color(0xFFFFA37A);
-  static const background = Color(0xFFF4F7FB);
+  // The website's light-blue canvas (`mist`).
+  static const background = Color(0xFFEAF0F6);
   static const surface = Colors.white;
   static const foreground = Color(0xFF10203E);
-  static const muted = Color(0xFFEAF0F6);
+  // The website's line colour, so tracks and chips show on the background.
+  static const muted = Color(0xFFDBE3EE);
   static const mutedForeground = Color(0xFF61708A);
   static const border = Color(0x14000000);
   static const success = Color(0xFF10B981);
