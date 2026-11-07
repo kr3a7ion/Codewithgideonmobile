@@ -81,6 +81,7 @@ class MentorChatMessage {
     this.source,
     this.clientMessageId,
     this.isConversationStarter = false,
+    this.imageUrls = const [],
   });
 
   final String id;
@@ -95,6 +96,9 @@ class MentorChatMessage {
   final String? source;
   final String? clientMessageId;
   final bool isConversationStarter;
+
+  /// Screenshots sent with the message (download links).
+  final List<String> imageUrls;
 
   bool get isMine => senderType == MentorChatSenderType.user;
   bool get isAdmin => senderType == MentorChatSenderType.admin;
@@ -117,6 +121,7 @@ class MentorChatMessage {
     String? source,
     String? clientMessageId,
     bool? isConversationStarter,
+    List<String>? imageUrls,
   }) {
     return MentorChatMessage(
       id: id ?? this.id,
@@ -132,6 +137,7 @@ class MentorChatMessage {
       clientMessageId: clientMessageId ?? this.clientMessageId,
       isConversationStarter:
           isConversationStarter ?? this.isConversationStarter,
+      imageUrls: imageUrls ?? this.imageUrls,
     );
   }
 
@@ -181,6 +187,7 @@ class MentorChatMessage {
       status: data['status'] as String?,
       source: data['source']?.toString(),
       clientMessageId: data['clientMessageId']?.toString(),
+      imageUrls: _imageUrls(data['attachments']),
     );
   }
 
@@ -205,11 +212,16 @@ class MentorChatMessage {
       source: data['source']?.toString(),
       clientMessageId: data['clientMessageId']?.toString(),
       isConversationStarter: data['isConversationStarter'] == true,
+      imageUrls: _imageUrls(data['attachments']),
     );
   }
 
   Map<String, dynamic> toCacheMap() {
     return <String, dynamic>{
+      if (imageUrls.isNotEmpty)
+        'attachments': [
+          for (final url in imageUrls) {'url': url},
+        ],
       'id': id,
       'conversationId': conversationId,
       'sessionId': sessionId,
@@ -298,4 +310,14 @@ bool _isAdminMessage(Map<String, dynamic> data) {
 bool _isAdminSummary(Map<String, dynamic> data) {
   return '${data['lastMessageSenderType'] ?? ''}'.toLowerCase() == 'admin' ||
       _isAdminMessage(data);
+}
+
+/// Download links from a message's `attachments` list ({url, ...} maps).
+List<String> _imageUrls(Object? raw) {
+  if (raw is! List) return const [];
+  return [
+    for (final item in raw)
+      if (item is Map && '${item['url'] ?? ''}'.startsWith('https://'))
+        '${item['url']}',
+  ];
 }

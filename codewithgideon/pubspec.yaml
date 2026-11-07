@@ -59,6 +59,9 @@ dependencies:
   flutter_chat_ui: ^2.11.1
   flutter_chat_types: ^3.6.2
   google_sign_in: ^7.2.0
+  # Screenshots in mentor chat
+  firebase_storage: ^13.0.0
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
