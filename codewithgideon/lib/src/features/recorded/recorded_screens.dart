@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../core/models/learning_models.dart';
@@ -17,6 +16,7 @@ import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
+import '../resources/open_resource.dart';
 import 'data/watch_progress_repository.dart';
 
 class RecordedPlayerScreen extends ConsumerWidget {
@@ -681,7 +681,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
                                 '${resource.type} • ${resource.size.isEmpty ? 'Open file' : resource.size} • ${resource.date}',
                               ),
                               trailing: const Icon(Icons.open_in_new_rounded),
-                              onTap: () => _openResource(context, resource),
+                              onTap: () => openCourseResource(context, resource),
                             ),
                           ),
                         ),
@@ -1548,7 +1548,7 @@ class _ResourcesLibraryScreenState
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _ResourceListTile(
                                 resource: resource,
-                                onTap: () => _openResource(context, resource),
+                                onTap: () => openCourseResource(context, resource),
                               ),
                             ),
                       ],
@@ -1631,31 +1631,6 @@ Color _resourceAccentColor(String type) {
       return const Color(0xFF15803D);
     default:
       return Colors.blue;
-  }
-}
-
-Future<void> _openResource(
-  BuildContext context,
-  CourseResource resource,
-) async {
-  final rawUrl = resource.url.trim();
-  if (rawUrl.isEmpty) {
-    showAppSnackBar(
-      context,
-      'A file link has not been added yet for ${resource.name}.',
-    );
-    return;
-  }
-
-  final uri = Uri.tryParse(rawUrl);
-  if (uri == null) {
-    showAppSnackBar(context, 'This resource link is not valid yet.');
-    return;
-  }
-
-  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!launched && context.mounted) {
-    showAppSnackBar(context, 'Could not open ${resource.name} right now.');
   }
 }
 

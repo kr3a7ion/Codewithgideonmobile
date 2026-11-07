@@ -13,6 +13,7 @@ import '../../core/widgets/states/app_state_widgets.dart';
 import '../../core/models/learning_models.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
+import '../resources/open_resource.dart';
 import '../recorded/data/watch_progress_repository.dart';
 
 class ClassListScreen extends ConsumerWidget {
@@ -433,7 +434,7 @@ class ClassDetailsScreen extends ConsumerWidget {
                               ),
                               trailing: const Icon(Icons.open_in_new_rounded),
                               onTap: () =>
-                                  _openClassResource(context, resource),
+                                  openCourseResource(context, resource),
                             ),
                           ),
                         ),
@@ -1126,31 +1127,6 @@ List<CourseResource> _classResourcesForSession({
     final sessionMatches = resource.sessionId == session.id;
     return pathMatches && courseMatches && sessionMatches;
   }).toList();
-}
-
-Future<void> _openClassResource(
-  BuildContext context,
-  CourseResource resource,
-) async {
-  final rawUrl = resource.url.trim();
-  if (rawUrl.isEmpty) {
-    showAppSnackBar(
-      context,
-      'A file link has not been added yet for ${resource.name}.',
-    );
-    return;
-  }
-
-  final uri = Uri.tryParse(rawUrl);
-  if (uri == null) {
-    showAppSnackBar(context, 'This resource link is not valid yet.');
-    return;
-  }
-
-  final didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!didLaunch && context.mounted) {
-    showAppSnackBar(context, 'Could not open ${resource.name} right now.');
-  }
 }
 
 String _accessLabel(CohortSessionModel session) {

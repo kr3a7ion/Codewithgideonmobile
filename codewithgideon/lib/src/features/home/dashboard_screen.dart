@@ -14,6 +14,7 @@ import '../catalog/models/course_model.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
 import '../community/state/community_notifications_provider.dart';
+import '../recorded/data/watch_progress_repository.dart';
 import '../student/models/pending_payment_model.dart';
 import 'models/student_dashboard_snapshot.dart';
 import 'state/dashboard_provider.dart';
@@ -129,6 +130,7 @@ class _DashboardContent extends ConsumerWidget {
                           ? null
                           : () => context.go('/classes'),
                     ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.04),
+                    _ContinueWatching(snapshot: snapshot),
                     const Gap(28),
                     _SectionHeading(
                       title: 'Quick Summary',
@@ -2240,5 +2242,98 @@ Future<void> _openExternalVideoLink(
   final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!launched && context.mounted) {
     showAppSnackBar(context, failedMessage);
+  }
+}
+
+/// Recordings the student started but didn't finish, newest class first.
+/// Hidden when there are none.
+class _ContinueWatching extends ConsumerWidget {
+  const _ContinueWatching({required this.snapshot});
+
+  final StudentDashboardSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref
+        .watch(watchProgressProvider)
+        .maybeWhen(
+          data: (items) => items,
+          orElse: () => const <String, WatchProgress>{},
+        );
+    final started = snapshot.recordedSessions
+        .where((session) {
+          final item = progress[session.id];
+          return item != null && item.isStarted && !item.completed;
+        })
+        .take(3)
+        .toList();
+    if (started.isEmpty) return const SizedBox.shrink();
+
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Gap(28),
+        _SectionHeading(
+          title: 'Continue Watching',
+          actionLabel: null,
+          onAction: null,
+        ),
+        const Gap(14),
+        for (final session in started) ...[
+          InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: () => context.push('/recorded/${session.id}'),
+            child: AppCard(
+              radius: 20,
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.play_circle_fill_rounded,
+                    color: AppColors.teal,
+                    size: 32,
+                  ),
+                  const Gap(12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          session.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Gap(4),
+                        Text(
+                          'Week ${session.week} • '
+                          '${(progress[session.id]!.fraction * 100).round()}% watched',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const Gap(8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(999),
+                          child: LinearProgressIndicator(
+                            value: progress[session.id]!.fraction,
+                            minHeight: 5,
+                            color: AppColors.teal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Gap(8),
+                  const Icon(Icons.chevron_right_rounded),
+                ],
+              ),
+            ),
+          ),
+          if (session != started.last) const Gap(10),
+        ],
+      ],
+    );
   }
 }

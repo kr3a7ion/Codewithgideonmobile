@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -140,6 +142,7 @@ class MentorRequestRepository {
     required String message,
     required MentorRequestContext contextType,
     String? clientMessageId,
+    List<Map<String, Object>> attachments = const [],
   }) async {
     final profile = dashboard.profile;
     final sessionId = (session?.id ?? fallbackSessionId ?? '').trim();
@@ -163,9 +166,45 @@ class MentorRequestRepository {
       'cohortId': profile.cohortId,
       'cohortLabel': profile.cohortLabel,
       'studentPhone': profile.phone,
+      if (attachments.isNotEmpty) 'attachments': attachments,
     });
     final data = Map<String, dynamic>.from(response.data as Map);
     return '${data['conversationId'] ?? ''}'.trim();
+  }
+
+  /// Uploads one screenshot to `mentor-uploads/<uid>/` (the only folder the
+  /// storage rules and `sendMentorRequest` accept) and returns the
+  /// attachment to send with the message.
+  Future<Map<String, Object>> uploadScreenshot({
+    required String uid,
+    required String filePath,
+  }) async {
+    final file = File(filePath);
+    final size = await file.length();
+    if (size > maxScreenshotBytes) {
+      throw StateError('Each screenshot must be under 5 MB.');
+    }
+    // Plain characters only, so the server's check of the download link
+    // matches the stored path.
+    final name = filePath
+        .split(RegExp(r'[\\/]'))
+        .last
+        .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '_');
+    final contentType = screenshotContentType(name);
+    if (contentType == null) {
+      throw StateError('Only PNG, JPG, GIF or WebP images can be sent.');
+    }
+    final path =
+        'mentor-uploads/$uid/${DateTime.now().millisecondsSinceEpoch}_$name';
+    final ref = FirebaseStorage.instance.ref(path);
+    await ref.putFile(file, SettableMetadata(contentType: contentType));
+    return <String, Object>{
+      'url': await ref.getDownloadURL(),
+      'path': path,
+      'name': name,
+      'contentType': contentType,
+      'size': size,
+    };
   }
 }
 
@@ -458,4 +497,19 @@ List<MentorChatMessage> reconcileOptimistic({
         (item) => !persisted.any((message) => _isSameMessage(message, item)),
       )
       .toList();
+}
+
+/// Same limit as the storage rules and the server.
+const int maxScreenshotBytes = 5 * 1024 * 1024;
+
+/// The image types the server accepts, from the file name; null otherwise.
+String? screenshotContentType(String fileName) {
+  final ext = fileName.split('.').last.toLowerCase();
+  return switch (ext) {
+    'png' => 'image/png',
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
+    _ => null,
+  };
 }

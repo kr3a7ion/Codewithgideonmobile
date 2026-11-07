@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
@@ -534,6 +536,9 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
   final Set<String> _locallyReadMentorReplyIds = <String>{};
   bool _isSending = false;
 
+  /// Screenshots chosen for the next message (the server takes up to 3).
+  final List<XFile> _picked = <XFile>[];
+
   String get _conversationSessionId {
     return _generalMentorSessionId;
   }
@@ -760,59 +765,113 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
                   ),
                 ],
               ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.darkSurface : Colors.white,
-                        borderRadius: BorderRadius.circular(28),
+                  if (_picked.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          for (final file in _picked)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.file(
+                                      File(file.path),
+                                      width: 64,
+                                      height: 64,
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: -8,
+                                    right: -8,
+                                    child: IconButton.filledTonal(
+                                      tooltip: 'Remove screenshot',
+                                      visualDensity: VisualDensity.compact,
+                                      iconSize: 16,
+                                      onPressed: _isSending
+                                          ? null
+                                          : () => setState(
+                                              () => _picked.remove(file),
+                                            ),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                      child: TextField(
-                        controller: _controller,
-                        minLines: 1,
-                        maxLines: 5,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark
-                              ? AppColors.darkForeground
-                              : AppColors.foreground,
+                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        tooltip: 'Add a screenshot',
+                        onPressed: _isSending ? null : _pickScreenshots,
+                        icon: Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: isDark ? AppColors.tealLight : AppColors.deepBlue,
                         ),
-                        decoration: InputDecoration(
-                          hintText: isSyncingConversation
-                              ? 'Conversation is syncing... you can still type'
-                              : 'Message mentor',
-                          hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                            color: isDark
-                                ? AppColors.darkMutedForeground
-                                : AppColors.mutedForeground,
+                      ),
+                      Expanded(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.darkSurface : Colors.white,
+                            borderRadius: BorderRadius.circular(28),
                           ),
-                          border: InputBorder.none,
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+                          child: TextField(
+                            controller: _controller,
+                            minLines: 1,
+                            maxLines: 5,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: isDark
+                                  ? AppColors.darkForeground
+                                  : AppColors.foreground,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: isSyncingConversation
+                                  ? 'Conversation is syncing... you can still type'
+                                  : 'Message mentor',
+                              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                                color: isDark
+                                    ? AppColors.darkMutedForeground
+                                    : AppColors.mutedForeground,
+                              ),
+                              border: InputBorder.none,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const Gap(10),
-                  InkWell(
-                    onTap: _isSending ? null : _submit,
-                    borderRadius: BorderRadius.circular(999),
-                    child: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.teal : AppColors.deepBlue,
-                        shape: BoxShape.circle,
-                      ),
-                      alignment: Alignment.center,
-                      child: Opacity(
-                        opacity: _isSending ? 0.6 : 1,
-                        child: const Icon(
-                          Icons.send_rounded,
-                          color: Colors.white,
+                      const Gap(10),
+                      InkWell(
+                        onTap: _isSending ? null : _submit,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: isDark ? AppColors.teal : AppColors.deepBlue,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Opacity(
+                            opacity: _isSending ? 0.6 : 1,
+                            child: const Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
@@ -821,6 +880,27 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _pickScreenshots() async {
+    final room = 3 - _picked.length;
+    if (room <= 0) {
+      showAppSnackBar(context, 'You can send up to 3 screenshots at a time.');
+      return;
+    }
+    try {
+      final files = await ImagePicker().pickMultiImage(
+        imageQuality: 85,
+        maxWidth: 2000,
+      );
+      if (!mounted || files.isEmpty) return;
+      setState(() => _picked.addAll(files.take(room)));
+      if (files.length > room) {
+        showAppSnackBar(context, 'Only the first 3 screenshots were added.');
+      }
+    } catch (_) {
+      if (mounted) showAppSnackBar(context, 'Could not open your photos.');
+    }
   }
 
   CohortSessionModel? _resolveSession(StudentDashboardSnapshot dashboard) {
@@ -836,7 +916,8 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
 
   Future<void> _submit() async {
     final message = _controller.text.trim();
-    if (message.isEmpty || _isSending) return;
+    if ((message.isEmpty && _picked.isEmpty) || _isSending) return;
+    final picked = List<XFile>.of(_picked);
     final clientMessageId =
         'client-${DateTime.now().microsecondsSinceEpoch}-$_conversationSessionId';
 
@@ -866,7 +947,9 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
       id: 'optimistic-${DateTime.now().microsecondsSinceEpoch}',
       conversationId: '',
       sessionId: session?.id ?? _conversationSessionId,
-      body: message,
+      // Same text the server stores for a screenshot-only message, so the
+      // sent copy replaces this one.
+      body: message.isEmpty ? 'Sent a screenshot' : message,
       senderType: MentorChatSenderType.user,
       senderName: dashboard.profile.fullName,
       createdAt: DateTime.now(),
@@ -879,20 +962,26 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
       _isSending = true;
       _optimisticMessages.add(optimistic);
       _controller.clear();
+      _picked.clear();
     });
     unawaited(_persistOptimisticMessages());
 
     try {
-      final conversationId = await ref
-          .read(mentorRequestRepositoryProvider)
-          .submitRequest(
-            dashboard: dashboard,
-            session: session,
-            fallbackSessionId: _conversationSessionId,
-            message: message,
-            contextType: widget.contextType,
-            clientMessageId: clientMessageId,
-          );
+      final repository = ref.read(mentorRequestRepositoryProvider);
+      final uid = ref.read(authControllerProvider).session?.uid ?? '';
+      final attachments = <Map<String, Object>>[
+        for (final file in picked)
+          await repository.uploadScreenshot(uid: uid, filePath: file.path),
+      ];
+      final conversationId = await repository.submitRequest(
+        dashboard: dashboard,
+        session: session,
+        fallbackSessionId: _conversationSessionId,
+        message: message,
+        contextType: widget.contextType,
+        clientMessageId: clientMessageId,
+        attachments: attachments,
+      );
       if (conversationId.isNotEmpty) {
         ref
                 .read(
@@ -944,13 +1033,21 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
       if (!mounted) return;
       setState(() {
         _optimisticMessages.removeWhere((item) => item.id == optimistic.id);
+        _picked
+          ..clear()
+          ..addAll(picked);
         _controller.text = message;
         _controller.selection = TextSelection.collapsed(
           offset: _controller.text.length,
         );
       });
       unawaited(_persistOptimisticMessages());
-      showAppSnackBar(context, 'Message not sent. Please try again.');
+      showAppSnackBar(
+        context,
+        error is StateError
+            ? error.message
+            : 'Message not sent. Please try again.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -2331,6 +2428,23 @@ class _MentorChatBubble extends StatelessWidget {
                   ),
                   const Gap(4),
                 ],
+                for (final url in message.imageUrls) ...[
+                  GestureDetector(
+                    onTap: () => _showScreenshot(context, url),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: Image.network(
+                        url,
+                        height: 180,
+                        fit: BoxFit.cover,
+                        semanticLabel: 'Screenshot',
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  ),
+                  const Gap(8),
+                ],
                 Text(
                   message.body,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -2466,4 +2580,32 @@ String _formatMentorDay(DateTime timestamp) {
   if (difference == 0) return 'Today';
   if (difference == 1) return 'Yesterday';
   return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+}
+
+/// Full-screen, zoomable view of a chat screenshot.
+void _showScreenshot(BuildContext context, String url) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: InteractiveViewer(
+              maxScale: 5,
+              child: Center(child: Image.network(url)),
+            ),
+          ),
+          SafeArea(
+            child: IconButton(
+              tooltip: 'Close',
+              color: Colors.white,
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
