@@ -10,7 +10,6 @@ import 'states/app_state_widgets.dart';
 
 enum AppButtonVariant { primary, secondary, outline, ghost, danger }
 
-const _brandLogoAsset = 'assets/branding/codewithgideon_logo.png';
 
 class AppButton extends StatelessWidget {
   const AppButton({
@@ -412,96 +411,6 @@ class _BackdropOrb extends StatelessWidget {
   }
 }
 
-class BrandLogo extends StatelessWidget {
-  const BrandLogo({
-    super.key,
-    this.size = 136,
-    this.semanticLabel = 'CodeWithGideon logo',
-  });
-
-  final double size;
-  final String semanticLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: semanticLabel,
-      image: true,
-      child: Image.asset(
-        _brandLogoAsset,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        filterQuality: FilterQuality.high,
-      ),
-    );
-  }
-}
-
-class BrandMark extends StatelessWidget {
-  const BrandMark({
-    super.key,
-    this.size = 112,
-    this.showBadge = true,
-    this.isCircular = false,
-  });
-
-  final double size;
-  final bool showBadge;
-  final bool isCircular;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Semantics(
-            label: 'CodeWithGideon logo',
-            image: true,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: AppGradients.primary,
-                shape: isCircular ? BoxShape.circle : BoxShape.rectangle,
-                borderRadius: isCircular
-                    ? null
-                    : BorderRadius.circular(size * 0.28),
-                boxShadow: AppShadows.premium,
-              ),
-              padding: EdgeInsets.all(size * 0.16),
-              child: SvgPicture.asset(
-                'assets/branding/codewithgideon_mark.svg',
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-          if (showBadge)
-            Positioned(
-              top: -8,
-              right: -8,
-              child: Container(
-                width: size * 0.26,
-                height: size * 0.26,
-                decoration: BoxDecoration(
-                  gradient: AppGradients.accent,
-                  shape: BoxShape.circle,
-                  boxShadow: AppShadows.card,
-                ),
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  color: Colors.white,
-                  size: size * 0.13,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class BrandHeroLockup extends StatelessWidget {
   const BrandHeroLockup({
     super.key,
@@ -608,8 +517,17 @@ class BrandWordmark extends StatelessWidget {
     final fontSize = height * 0.92;
     return Semantics(
       label: 'CodeWithGideon',
-      child: Text(
-        'CodeWithGideon',
+      // Two-tone like the official logo: "Gideon" in the brand teal.
+      child: Text.rich(
+        const TextSpan(
+          text: 'CodeWith',
+          children: [
+            TextSpan(
+              text: 'Gideon',
+              style: TextStyle(color: Color(0xFF1FBEC3)),
+            ),
+          ],
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
