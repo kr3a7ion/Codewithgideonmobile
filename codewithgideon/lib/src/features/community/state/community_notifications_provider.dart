@@ -99,7 +99,12 @@ Future<void> clearMentorReplyNotifications(
 final cohortMessagesProvider =
     StreamProvider.autoDispose<List<CohortMessageModel>>((ref) async* {
       final dashboard = await ref.watch(dashboardSnapshotProvider.future);
-      final cohortKey = dashboard.activeCohort.cohortKey.trim();
+      // The student's own intake; the open one is only a fallback, or a new
+      // intake would take over every current student's updates.
+      final own = (dashboard.profile.cohortKey ?? '').trim();
+      final cohortKey = own.isNotEmpty
+          ? own
+          : dashboard.activeCohort.cohortKey.trim();
       if (cohortKey.isEmpty) {
         yield <CohortMessageModel>[];
         return;

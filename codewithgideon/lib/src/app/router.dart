@@ -27,17 +27,24 @@ final _communityNavigatorKey = GlobalKey<NavigatorState>(
 final _profileNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'profile');
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authControllerProvider);
-  final onboardingState = ref.watch(hasSeenOnboardingProvider);
-  final hasSeenOnboarding = onboardingState.maybeWhen(
-    data: (value) => value,
-    orElse: () => false,
-  );
+  // Built once. A change in sign-in or onboarding only re-runs redirect, so
+  // the open screens (and an error on the login form) survive it.
+  final refresh = ValueNotifier<int>(0);
+  ref.listen(authControllerProvider, (_, _) => refresh.value++);
+  ref.listen(hasSeenOnboardingProvider, (_, _) => refresh.value++);
+  ref.onDispose(refresh.dispose);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
+    refreshListenable: refresh,
     redirect: (context, state) {
+      final authState = ref.read(authControllerProvider);
+      final onboardingState = ref.read(hasSeenOnboardingProvider);
+      final hasSeenOnboarding = onboardingState.maybeWhen(
+        data: (value) => value,
+        orElse: () => false,
+      );
       final location = state.matchedLocation;
       final isBooting =
           authState.status == AuthStatus.booting || onboardingState.isLoading;
