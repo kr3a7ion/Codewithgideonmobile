@@ -10,7 +10,6 @@ import 'states/app_state_widgets.dart';
 
 enum AppButtonVariant { primary, secondary, outline, ghost, danger }
 
-
 class AppButton extends StatelessWidget {
   const AppButton({
     super.key,
@@ -406,6 +405,70 @@ class _BackdropOrb extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class BrandMark extends StatelessWidget {
+  const BrandMark({
+    super.key,
+    this.size = 112,
+    this.showBadge = true,
+    this.isCircular = false,
+  });
+
+  final double size;
+  final bool showBadge;
+  final bool isCircular;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Semantics(
+            label: 'CodeWithGideon logo',
+            image: true,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: AppGradients.primary,
+                shape: isCircular ? BoxShape.circle : BoxShape.rectangle,
+                borderRadius: isCircular
+                    ? null
+                    : BorderRadius.circular(size * 0.28),
+                boxShadow: AppShadows.premium,
+              ),
+              padding: EdgeInsets.all(size * 0.16),
+              child: SvgPicture.asset(
+                'assets/branding/codewithgideon_mark.svg',
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+          if (showBadge)
+            Positioned(
+              top: -8,
+              right: -8,
+              child: Container(
+                width: size * 0.26,
+                height: size * 0.26,
+                decoration: BoxDecoration(
+                  gradient: AppGradients.accent,
+                  shape: BoxShape.circle,
+                  boxShadow: AppShadows.card,
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                  size: size * 0.13,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
