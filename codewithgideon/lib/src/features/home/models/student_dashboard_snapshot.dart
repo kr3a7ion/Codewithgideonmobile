@@ -3,6 +3,7 @@ import '../../catalog/models/course_model.dart';
 import '../../catalog/models/path_model.dart';
 import '../../cohorts/models/active_cohort_model.dart';
 import '../../cohorts/models/cohort_session_model.dart';
+import '../../cohorts/presentation/session_status.dart';
 import '../../student/models/student_profile_model.dart';
 
 class StudentDashboardSnapshot {
@@ -50,9 +51,7 @@ class StudentDashboardSnapshot {
     if (hasAnyPending) return null;
     final now = DateTime.now();
     for (final session in unlockedSessions) {
-      if (!session.startsAt.isAfter(now) && !session.endsAt.isBefore(now)) {
-        return session;
-      }
+      if (isSessionLive(session, now: now)) return session;
     }
     return null;
   }
