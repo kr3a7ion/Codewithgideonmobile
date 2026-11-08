@@ -77,7 +77,9 @@ void main() {
             AsyncData(buildDashboardSnapshot()),
           ),
         ],
-        child: const MaterialApp(home: DashboardScreen()),
+        child: const MaterialApp(
+          home: Scaffold(body: DashboardScreen()),
+        ),
       ),
     );
     await tester.pumpAndSettle();
