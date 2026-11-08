@@ -198,6 +198,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
     final max = checkout.maxAllowedWeeks;
     final weeks = max <= 0 ? 0 : requestedWeeks.clamp(1, max);
     final isTopUp = checkout.kind == PaymentFlowKind.topUp;
+    final cohort = checkout.profile.cohortLabel?.trim() ?? '';
     final already = isTopUp ? checkout.committedWeeks : 0;
     final total = checkout.totalProgramWeeks < 1
         ? 1
@@ -236,10 +237,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               '$total weeks · live classes, every class recorded',
               style: theme.textTheme.bodySmall?.copyWith(color: _muted(context)),
             ),
-            if (checkout.profile.cohortLabel.trim().isNotEmpty) ...[
+            if (cohort.isNotEmpty) ...[
               const Gap(6),
               Text(
-                checkout.profile.cohortLabel,
+                cohort,
                 style: theme.textTheme.titleSmall?.copyWith(
                   fontWeight: FontWeight.w800,
                 ),
