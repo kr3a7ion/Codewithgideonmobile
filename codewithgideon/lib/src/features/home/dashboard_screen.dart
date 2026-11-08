@@ -320,9 +320,6 @@ class _DashboardHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 340;
     final heroSession = snapshot.heroSession;
     final heroStatusLabel = heroSession == null
         ? null
@@ -341,83 +338,34 @@ class _DashboardHero extends StatelessWidget {
         ? 'Your admin has not published a session for your paid weeks yet.'
         : _heroScheduleLabel(heroSession);
 
+    // Navy in light and dark mode, like the website's hero; the week track is
+    // its one graphic.
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 18, 20),
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: isDark
-            ? const LinearGradient(
-                colors: [
-                  Color(0xFF07101F),
-                  Color(0xFF0C1A30),
-                  Color(0xFF14294B),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : const LinearGradient(
-                colors: [
-                  Color.fromARGB(255, 253, 239, 230),
-                  Color.fromARGB(255, 219, 232, 255),
-                  Color.fromARGB(255, 208, 238, 236),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : AppColors.deepBlue).withValues(
-              alpha: isDark ? 0.18 : 0.08,
-            ),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          colors: [AppColors.deepBlue, AppColors.deepBlueDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: AppShadows.card,
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (compact)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeroTextBlock(
-                  accentLabel: accentLabel,
-                  headline: headline,
-                  caption: caption,
-                  heroStatusLabel: heroStatusLabel,
-                  showHeroTiming:
-                      !snapshot.hasAnyPending && heroSession != null,
-                ),
-                const Gap(12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _HeroIllustration(isPending: snapshot.hasAnyPending),
-                ),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: _HeroTextBlock(
-                    accentLabel: accentLabel,
-                    headline: headline,
-                    caption: caption,
-                    heroStatusLabel: heroStatusLabel,
-
-                    showHeroTiming:
-                        !snapshot.hasAnyPending && heroSession != null,
-                  ),
-                ),
-                const Gap(8),
-                _HeroIllustration(isPending: snapshot.hasAnyPending),
-              ],
-            ),
+          _HeroTextBlock(
+            accentLabel: accentLabel,
+            headline: headline,
+            caption: caption,
+            heroStatusLabel: heroStatusLabel,
+            showHeroTiming: !snapshot.hasAnyPending && heroSession != null,
+          ),
           if (snapshot.hasAnyPending || heroSession != null) ...[
             const Gap(18),
-            // Keep the primary hero action full-width so it reads like the web CTA.
             AppButton(
               expanded: true,
+              variant: AppButtonVariant.secondary,
               label: snapshot.hasAnyPending
                   ? 'Await Approval'
                   : _shouldWatchRecording(heroSession)
@@ -435,7 +383,7 @@ class _DashboardHero extends StatelessWidget {
                     : _isUpcomingJoinableSession(heroSession)
                     ? Icons.timer_rounded
                     : _shouldJoinLiveClass(heroSession)
-                    ? Icons.play_circle_rounded
+                    ? Icons.videocam_rounded
                     : Icons.menu_book_rounded,
                 color: Colors.white,
                 size: 20,
@@ -443,6 +391,14 @@ class _DashboardHero extends StatelessWidget {
               onPressed: onPrimaryAction,
             ),
           ],
+          const Gap(20),
+          Divider(color: Colors.white.withValues(alpha: 0.12), height: 1),
+          const Gap(16),
+          _WeekTrack(
+            total: snapshot.totalProgramWeeks,
+            paid: snapshot.paidWeeks,
+            current: snapshot.hasAnyPending ? 0 : heroSession?.week ?? 0,
+          ),
         ],
       ),
     );
@@ -502,7 +458,6 @@ class _HeroTextBlock extends StatelessWidget {
     required this.headline,
     required this.caption,
     required this.heroStatusLabel,
-
     required this.showHeroTiming,
   });
 
@@ -515,7 +470,6 @@ class _HeroTextBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,34 +479,29 @@ class _HeroTextBlock extends StatelessWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.labelLarge?.copyWith(
-            color: isDark ? AppColors.tealLight : AppColors.deepBlue,
+            color: Colors.white.withValues(alpha: 0.72),
             fontWeight: FontWeight.w700,
           ),
         ),
-        const Gap(8),
+        const Gap(10),
         if (showHeroTiming && heroStatusLabel != null) ...[
           _HeroTimingPill(label: heroStatusLabel!),
-          const Gap(10),
+          const Gap(12),
         ],
-
-        const Gap(8),
-
         Text(
           headline,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w800,
-            color: isDark ? AppColors.darkForeground : AppColors.foreground,
+            color: Colors.white,
           ),
         ),
         const Gap(8),
         Text(
           caption,
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: isDark
-                ? AppColors.darkMutedForeground
-                : AppColors.mutedForeground,
+            color: Colors.white.withValues(alpha: 0.72),
             height: 1.4,
           ),
         ),
@@ -561,121 +510,149 @@ class _HeroTextBlock extends StatelessWidget {
   }
 }
 
-class _HeroIllustration extends StatelessWidget {
-  const _HeroIllustration({required this.isPending});
+/// One block per course week, as on the website: finished weeks ticked, the
+/// current week numbered, paid weeks to come pale teal, the rest locked.
+class _WeekTrack extends StatelessWidget {
+  const _WeekTrack({
+    required this.total,
+    required this.paid,
+    required this.current,
+  });
 
-  final bool isPending;
+  final int total;
+  final int paid;
+  final int current;
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 360;
-    final width = compact ? 108.0 : 128.0;
-    final height = compact ? 118.0 : 136.0;
+    final theme = Theme.of(context);
+    final weeks = total < 1 ? 1 : total;
+    final showIcons = weeks <= 16;
+    final caption = paid > 0
+        ? '$paid of $weeks weeks unlocked'
+        : '$weeks-week course • no weeks unlocked yet';
 
-    // The illustration keeps the reference's playful balance without requiring
-    // a third-party asset or mismatching the current brand system.
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Stack(
-        clipBehavior: Clip.none,
+    return Semantics(
+      label: current > 0
+          ? "You're on week $current of $weeks. $caption."
+          : '$caption.',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: 8,
-            bottom: 14,
-            child: Container(
-              width: 94,
-              height: 62,
-              decoration: BoxDecoration(
-                color: (isDark ? AppColors.orangeLight : AppColors.orange)
-                    .withValues(alpha: isDark ? 0.32 : 0.24),
-                borderRadius: BorderRadius.circular(999),
-              ),
+          Text(
+            caption,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          Positioned(
-            left: 10,
-            bottom: 24,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: (isDark ? Colors.white : AppColors.deepBlue).withValues(
-                  alpha: isDark ? 0.12 : 0.08,
+          const Gap(10),
+          Row(
+            children: [
+              for (var week = 1; week <= weeks; week++) ...[
+                if (week > 1) const Gap(4),
+                Expanded(
+                  child: _WeekBlock(
+                    week: week,
+                    state: week > paid
+                        ? _WeekState.locked
+                        : week == current
+                        ? _WeekState.current
+                        : current > 0 && week < current
+                        ? _WeekState.done
+                        : _WeekState.ready,
+                    showIcon: showIcons,
+                    numberOnly: weeks > 12,
+                  ),
                 ),
-                shape: BoxShape.circle,
-              ),
-            ),
+              ],
+            ],
           ),
-          Positioned(
-            top: 0,
-            right: 14,
-            child: Icon(
-              isPending
-                  ? Icons.lock_rounded
-                  : Icons.menu_book_rounded,
-              size: 34,
-              color: isDark ? AppColors.tealLight : AppColors.deepBlue,
-            ),
-          ),
-          Positioned(
-            top: 18,
-            right: 20,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.deepBlueLight.withValues(alpha: 0.8)
-                    : AppColors.teal.withValues(alpha: 0.16),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 28,
-            right: 30,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.teal : AppColors.deepBlue,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.school_rounded,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 64,
-            right: 52,
-            child: Transform.rotate(
-              angle: -0.2,
-              child: Container(
-                width: 44,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.teal.withValues(alpha: 0.92)
-                      : AppColors.teal,
-                  borderRadius: BorderRadius.circular(12),
+          const Gap(8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final label in ['Week 1', 'Week $weeks'])
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.menu_book_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+enum _WeekState { done, current, ready, locked }
+
+class _WeekBlock extends StatelessWidget {
+  const _WeekBlock({
+    required this.week,
+    required this.state,
+    required this.showIcon,
+    required this.numberOnly,
+  });
+
+  final int week;
+  final _WeekState state;
+  final bool showIcon;
+  final bool numberOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final (fill, border) = switch (state) {
+      _WeekState.done => (AppColors.teal, null),
+      _WeekState.current => (AppColors.tealDark, AppColors.tealLight),
+      _WeekState.ready => (
+        AppColors.tealLight.withValues(alpha: 0.25),
+        AppColors.tealLight.withValues(alpha: 0.6),
+      ),
+      _WeekState.locked => (Colors.white.withValues(alpha: 0.08), null),
+    };
+    final Widget? child = switch (state) {
+      _WeekState.current => FittedBox(
+        child: Text(
+          numberOnly ? '$week' : 'W$week',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: 11,
+          ),
+        ),
+      ),
+      _WeekState.done when showIcon => const Icon(
+        Icons.check_rounded,
+        color: Colors.white,
+        size: 14,
+      ),
+      _WeekState.locked when showIcon => Icon(
+        Icons.lock_rounded,
+        color: Colors.white.withValues(alpha: 0.35),
+        size: 12,
+      ),
+      _ => null,
+    };
+    return Container(
+      height: 32,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(7),
+        border: border == null
+            ? null
+            : Border.all(
+                color: border,
+                width: state == _WeekState.current ? 2 : 1,
+              ),
+      ),
+      child: child,
     );
   }
 }
@@ -1714,34 +1691,28 @@ class _HeroTimingPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: (isDark ? Colors.white : AppColors.deepBlue).withValues(
-          alpha: isDark ? 0.08 : 0.08,
-        ),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: (isDark ? AppColors.tealLight : AppColors.deepBlue).withValues(
-            alpha: 0.18,
-          ),
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.timer_rounded,
-            size: 12,
-            color: isDark ? AppColors.tealLight : AppColors.deepBlue,
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: AppColors.orange,
+              shape: BoxShape.circle,
+            ),
           ),
-          const Gap(4),
+          const Gap(6),
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: isDark ? AppColors.darkForeground : AppColors.warning,
+              color: Colors.white,
               fontWeight: FontWeight.w700,
             ),
           ),

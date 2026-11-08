@@ -1,0 +1,27 @@
+name: UI preview (temporary)
+
+on:
+  push:
+    branches: ['feat/v1.1-home-hero']
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: codewithgideon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.38.7'
+          cache: true
+      - run: flutter pub get
+      - name: Font for readable text
+        run: |
+          mkdir -p preview_test/fonts
+          curl -sSL -o preview_test/fonts/Manrope.ttf "https://github.com/google/fonts/raw/main/ofl/manrope/Manrope%5Bwght%5D.ttf"
+      - run: flutter test --update-goldens preview_test || true
+      - name: Print images
+        run: for f in preview_test/out/*.png; do echo "IMG_BEGIN $f"; base64 -w0 "$f"; echo; echo "IMG_END"; done
