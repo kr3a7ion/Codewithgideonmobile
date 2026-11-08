@@ -230,7 +230,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/community',
-                builder: (context, state) => const CommunityChannelsScreen(),
+                builder: (context, state) => const ChatScreen(),
               ),
             ],
           ),

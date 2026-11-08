@@ -23,402 +23,166 @@ import 'state/community_notifications_provider.dart';
 import 'state/community_spaces_provider.dart';
 import 'state/mentor_request_provider.dart';
 
-class CommunityChannelsScreen extends ConsumerStatefulWidget {
-  const CommunityChannelsScreen({super.key});
+/// The Chat tab: the conversation with Gideon, or the cohort's community
+/// rooms.
+class ChatScreen extends ConsumerStatefulWidget {
+  const ChatScreen({super.key});
 
   @override
-  ConsumerState<CommunityChannelsScreen> createState() =>
-      _CommunityChannelsScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _CommunityChannelsScreenState
-    extends ConsumerState<CommunityChannelsScreen> {
-  final TextEditingController _searchController = TextEditingController();
-  String _query = '';
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
+class _ChatScreenState extends ConsumerState<ChatScreen> {
+  bool _community = false;
 
   @override
   Widget build(BuildContext context) {
-    final dashboard = ref.watch(dashboardSnapshotProvider);
-    final spaces = ref.watch(communitySpacesProvider);
-    final unreadCount = ref.watch(unreadMessagesCountProvider);
-    final mentorMessages = ref.watch(
-      mentorRequestsProvider(
-        const MentorConversationQuery(sessionId: null, conversationId: null),
-      ),
-    );
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final hasNewGroupMessages = ref
+        .watch(cohortMessagesProvider)
+        .maybeWhen(
+          data: (items) => items.any(
+            (item) => item.createdAt.isAfter(
+              DateTime.now().subtract(const Duration(days: 1)),
+            ),
+          ),
+          orElse: () => false,
+        );
+
+    Widget segment(String label, bool selected, {bool dot = false}) {
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: GestureDetector(
+            onTap: () => setState(() => _community = label == 'Community'),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: selected ? theme.cardColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+                  if (dot) ...[
+                    const Gap(6),
+                    const CircleAvatar(
+                      radius: 3.5,
+                      backgroundColor: AppColors.orange,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return DoubleBackToExitScope(
-      child: AppScreen(
-        body: SafeArea(
-          top: false,
-          bottom: false,
-          child: dashboard.when(
-            loading: () => const AppLoadingState(
-              title: 'Loading community',
-              message: 'Preparing your mentor support and student spaces.',
-            ),
-            error: (error, stackTrace) => AppErrorState(
-              title: 'Could not load community',
-              message:
-                  'We could not prepare your community home right now. Please try again.',
-              onRetry: () {
-                ref.invalidate(dashboardSnapshotProvider);
-                ref.invalidate(communitySpacesProvider);
-              },
-            ),
-            data: (snapshot) {
-              final liveSpacesCount = spaces.maybeWhen(
-                data: (items) => items.length,
-                orElse: () => 0,
-              );
-              final latestMentorReply = mentorMessages.maybeWhen(
-                data: (items) =>
-                    _latestMentorChat(items.where((m) => m.isAdmin).toList()),
-                orElse: () => null,
-              );
-              final filteredSpaces = spaces.maybeWhen(
-                data: (items) => items.where(_matchesQuery).toList(),
-                orElse: () => const <CommunitySpaceModel>[],
-              );
-              final unreadLabel = unreadCount.maybeWhen(
-                data: (count) => count == 0 ? 'Inbox clear' : '$count unread',
-                orElse: () => 'Checking inbox',
-              );
-
-              return CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 28, 22, 16),
-                      child: Container(
-                        padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-                        decoration: BoxDecoration(
-                          gradient:
-                              Theme.of(context).brightness == Brightness.dark
-                              ? const LinearGradient(
-                                  colors: [
-                                    AppColors.deepBlueDark,
-                                    Color(0xFF0E2348),
-                                    AppColors.tealDark,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                )
-                              : const LinearGradient(
-                                  colors: [
-                                    Color(0xFF0E2C63),
-                                    Color(0xFF1C4986),
-                                    Color(0xFF117781),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                          borderRadius: BorderRadius.circular(32),
-                          boxShadow: AppShadows.premium,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            PremiumPageHeader(
-                              title: 'Community',
-                              subtitle:
-                                  'Mentor help, student rooms, and course resources arranged like one learning hub.',
-                              onDark: true,
-                              trailing: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  PremiumIconButton(
-                                    icon: Icons.notifications_none_rounded,
-                                    onTap: () =>
-                                        context.push('/community/messages'),
-                                  ),
-                                  if (unreadCount.maybeWhen(
-                                    data: (count) => count > 0,
-                                    orElse: () => false,
-                                  ))
-                                    Positioned(
-                                      top: -2,
-                                      right: -2,
-                                      child: Container(
-                                        constraints: const BoxConstraints(
-                                          minWidth: 18,
-                                          minHeight: 18,
-                                        ),
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          color: AppColors.orange,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: unreadCount.maybeWhen(
-                                          data: (count) => Text(
-                                            count > 99 ? '99+' : '$count',
-                                            textAlign: TextAlign.center,
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelSmall
-                                                ?.copyWith(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                          ),
-                                          orElse: () => const SizedBox.shrink(),
-                                        ),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const Gap(18),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _CommunityHeroStat(
-                                    label: 'Mentor',
-                                    value: latestMentorReply == null
-                                        ? 'Active'
-                                        : 'Online',
-                                  ),
-                                ),
-                                const Gap(10),
-                                Expanded(
-                                  child: _CommunityHeroStat(
-                                    label: 'Rooms',
-                                    value: '$liveSpacesCount live',
-                                  ),
-                                ),
-                                const Gap(10),
-                                Expanded(
-                                  child: _CommunityHeroStat(
-                                    label: 'Library',
-                                    value:
-                                        '${snapshot.libraryResources.length} files',
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const Gap(18),
-                            Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.14),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              child: TextField(
-                                controller: _searchController,
-                                onChanged: (value) => setState(() {
-                                  _query = value.trim().toLowerCase();
-                                }),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: Colors.white),
-                                decoration: InputDecoration(
-                                  hintText: 'Search your student spaces...',
-                                  hintStyle: Theme.of(context)
-                                      .textTheme
-                                      .bodyMedium
-                                      ?.copyWith(
-                                        color: AppColors.darkMutedForeground,
-                                      ),
-                                  prefixIcon: Icon(
-                                    Icons.search_rounded,
-                                    color: Colors.white.withValues(alpha: 0.86),
-                                  ),
-                                  suffixIcon: _query.isEmpty
-                                      ? null
-                                      : IconButton(
-                                          onPressed: () {
-                                            _searchController.clear();
-                                            setState(() {
-                                              _query = '';
-                                            });
-                                          },
-                                          icon: Icon(
-                                            Icons.close_rounded,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.86,
-                                            ),
-                                          ),
-                                        ),
-                                  fillColor: Colors.transparent,
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(22),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(22),
-                                    borderSide: BorderSide(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.22,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Chat', style: theme.textTheme.displayMedium),
+                  const Gap(16),
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.darkMuted : AppColors.muted,
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(22, 0, 22, 18),
-                    sliver: SliverToBoxAdapter(
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Quick Access',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.w800),
-                              ),
-                              const Spacer(),
-                              Text(
-                                unreadLabel,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: _contextMutedColor(context),
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          const Gap(12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _ConnectedFeatureCard(
-                                  icon: Icons.support_agent_rounded,
-                                  accent: AppColors.tealDark,
-                                  title: 'Mentor Support',
-                                  eyebrow: snapshot.heroLabel,
-                                  description: latestMentorReply == null
-                                      ? 'For quick support and feedback.'
-                                      : latestMentorReply.body,
-                                  onTap: () => context.push('/mentor'),
-                                  badge: latestMentorReply == null
-                                      ? null
-                                      : 'Reply ready',
-                                ),
-                              ),
-                              const Gap(12),
-                              Expanded(
-                                child: _ConnectedFeatureCard(
-                                  icon: Icons.menu_book_rounded,
-                                  accent: AppColors.deepBlueLight,
-                                  title: 'Resource Library',
-                                  eyebrow:
-                                      '${snapshot.libraryResources.length} published',
-                                  description:
-                                      'Open class-ready notes, links, and downloads.',
-                                  onTap: () => context.push('/resources'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(22, 2, 22, 130),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        Row(
-                          children: [
-                            Text(
-                              'Student Spaces',
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(
-                                    color: _contextMutedColor(context),
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                            const Spacer(),
-                            spaces.maybeWhen(
-                              data: (items) => Text(
-                                '${items.length} published',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: _contextMutedColor(context),
-                                    ),
-                              ),
-                              orElse: () => const SizedBox.shrink(),
-                            ),
-                          ],
+                    child: Row(
+                      children: [
+                        segment('Gideon', !_community),
+                        segment(
+                          'Community',
+                          _community,
+                          dot: hasNewGroupMessages && !_community,
                         ),
-                        const Gap(12),
-                        Text(
-                          'Tap into rooms, meet, support and discuss',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: _contextMutedColor(context),
-                                height: 1.5,
-                              ),
-                        ),
-                        const Gap(14),
-                        spaces.when(
-                          loading: () => const AppLoadingState(
-                            title: 'Loading spaces',
-                            message: 'Pulling the latest rooms.',
-                            compact: true,
-                          ),
-                          error: (error, stackTrace) => AppErrorState(
-                            title: 'Could not load spaces',
-                            message:
-                                'Student spaces are temporarily unavailable. Please try again.',
-                            onRetry: () =>
-                                ref.invalidate(communitySpacesProvider),
-                          ),
-                          data: (_) {
-                            if (filteredSpaces.isEmpty) {
-                              return AppEmptyState(
-                                title: _query.isEmpty
-                                    ? 'No student spaces yet'
-                                    : 'No matching spaces',
-                                message: _query.isEmpty
-                                    ? 'No published room for this cohort yet.'
-                                    : 'Try another keyword or clear the search to see every published room.',
-                                icon: Icons.forum_outlined,
-                              );
-                            }
-
-                            return Column(
-                              children: [
-                                for (final space in filteredSpaces) ...[
-                                  _CommunitySpaceTile(space: space),
-                                  const Gap(12),
-                                ],
-                              ],
-                            );
-                          },
-                        ),
-                      ]),
+                      ],
                     ),
                   ),
                 ],
-              );
-            },
-          ),
+              ),
+            ),
+            Expanded(
+              child: _community
+                  ? const _CommunityRooms()
+                  : const AskMentorScreen(
+                      sessionId: null,
+                      contextType: MentorRequestContext.recorded,
+                      embedded: true,
+                    ),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  bool _matchesQuery(CommunitySpaceModel space) {
-    if (_query.isEmpty) return true;
-    return space.title.toLowerCase().contains(_query) ||
-        space.description.toLowerCase().contains(_query) ||
-        (space.category ?? '').toLowerCase().contains(_query);
+class _CommunityRooms extends ConsumerWidget {
+  const _CommunityRooms();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spaces = ref.watch(communitySpacesProvider);
+    return RefreshIndicator(
+      color: AppColors.teal,
+      onRefresh: () async => ref.invalidate(communitySpacesProvider),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 120),
+        children: [
+          spaces.when(
+            loading: () => const AppLoadingState(
+              title: 'Loading rooms',
+              message: 'Pulling the latest rooms for your cohort.',
+              compact: true,
+            ),
+            error: (error, stackTrace) => AppErrorState(
+              title: 'Could not load rooms',
+              message: 'Community rooms are unavailable right now.',
+              onRetry: () => ref.invalidate(communitySpacesProvider),
+            ),
+            data: (items) {
+              if (items.isEmpty) {
+                return const AppEmptyState(
+                  title: 'No rooms yet',
+                  message:
+                      'Your cohort room shows here once Gideon opens it.',
+                  icon: Icons.forum_outlined,
+                );
+              }
+              return Column(
+                children: [
+                  for (final space in items) ...[
+                    _CommunitySpaceTile(space: space),
+                    const Gap(12),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -520,10 +284,14 @@ class AskMentorScreen extends ConsumerStatefulWidget {
     required this.sessionId,
     required this.contextType,
     this.initialText = '',
+    this.embedded = false,
   });
 
   final String? sessionId;
   final MentorRequestContext contextType;
+
+  /// Shown inside the Chat tab: no back button, room for the tab bar.
+  final bool embedded;
 
   /// Typed into the message box on open, e.g. the moment of a recording.
   final String initialText;
@@ -557,7 +325,6 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dashboardAsync = ref.watch(dashboardSnapshotProvider);
     final conversationSessionId = _conversationSessionId;
     final conversationAsync = ref.watch(
       mentorRequestsProvider(
@@ -569,15 +336,6 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     );
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final session = dashboardAsync.maybeWhen(
-      data: _resolveSession,
-      orElse: () => null,
-    );
-    final heading = session?.title ?? 'Ask Mentor';
-    final pathLabel = session?.pathTitle ?? 'Private support channel';
-    final contextLabel = widget.contextType == MentorRequestContext.live
-        ? 'Live class support'
-        : 'Recorded lesson follow up';
     final storedMessages = conversationAsync.maybeWhen(
       data: (items) => items,
       orElse: () => const <MentorChatMessage>[],
@@ -606,134 +364,72 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
     final isSyncingConversation =
         conversationAsync.isLoading && storedMessages.isEmpty;
 
-    return AppScreen(
-      resizeToAvoidBottomInset: true,
-      body: SafeArea(
-        top: false,
-        bottom: false,
-        child: Column(
+    final muted = isDark
+        ? AppColors.darkMutedForeground
+        : AppColors.mutedForeground;
+    final content = Column(
           children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: isDark
-                    ? const LinearGradient(
-                        colors: [AppColors.deepBlueDark, Color(0xFF12356D)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : AppGradients.primary,
-                borderRadius: const BorderRadius.vertical(
-                  bottom: Radius.circular(30),
-                ),
-              ),
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-              child: Column(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      PremiumIconButton(
-                        icon: Icons.arrow_back_rounded,
+                  if (!widget.embedded) ...[
+                    Semantics(
+                      button: true,
+                      label: 'Back',
+                      child: InkWell(
                         onTap: () => context.pop(),
-                        isDark: true,
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          contextLabel,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+                        customBorder: const CircleBorder(),
+                        child: CircleAvatar(
+                          radius: 20,
+                          backgroundColor: theme.cardColor,
+                          child: Icon(
+                            Icons.arrow_back_rounded,
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                       ),
-                    ],
+                    ),
+                    const Gap(10),
+                  ],
+                  const CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.deepBlue,
+                    child: Text(
+                      'G',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                  const Gap(14),
-                  Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(18),
+                  const Gap(12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Gideon · Mentor',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.support_agent_rounded,
-                          color: Colors.white,
+                        Text(
+                          isSyncingConversation
+                              ? 'Syncing your conversation...'
+                              : 'Usually replies within a few hours',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: muted,
+                          ),
                         ),
-                      ),
-                      const Gap(12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Mentor Chat',
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const Gap(4),
-                            Text(
-                              heading,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: Colors.white.withValues(alpha: 0.86),
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const Gap(14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _MentorHeaderPill(
-                          icon: Icons.route_outlined,
-                          label: pathLabel,
-                        ),
-                      ),
-                      const Gap(10),
-                      _MentorHeaderPill(
-                        icon: isSyncingConversation
-                            ? Icons.sync_rounded
-                            : mergedMessages.isEmpty
-                            ? Icons.mark_chat_unread_outlined
-                            : Icons.verified_rounded,
-                        label: isSyncingConversation
-                            ? 'Syncing'
-                            : mergedMessages.isEmpty
-                            ? 'Listening'
-                            : 'Synced',
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.darkBackground
-                      : AppColors.background,
-                ),
-                child: CustomScrollView(
+              child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(
                     parent: BouncingScrollPhysics(),
                   ),
@@ -755,136 +451,145 @@ class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
                     const SliverToBoxAdapter(child: Gap(14)),
                   ],
                 ),
-              ),
             ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 20),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF0F182A) : Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.deepBlue.withValues(
-                      alpha: isDark ? 0.14 : 0.05,
-                    ),
-                    blurRadius: 18,
-                    offset: const Offset(0, -6),
-                  ),
-                ],
+            if (_picked.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Row(
+                  children: [
+                    for (final file in _picked)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(file.path),
+                                width: 64,
+                                height: 64,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: -8,
+                              right: -8,
+                              child: IconButton.filledTonal(
+                                tooltip: 'Remove screenshot',
+                                visualDensity: VisualDensity.compact,
+                                iconSize: 16,
+                                onPressed: _isSending
+                                    ? null
+                                    : () => setState(
+                                        () => _picked.remove(file),
+                                      ),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_picked.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          for (final file in _picked)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Image.file(
-                                      File(file.path),
-                                      width: 64,
-                                      height: 64,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  Positioned(
-                                    top: -8,
-                                    right: -8,
-                                    child: IconButton.filledTonal(
-                                      tooltip: 'Remove screenshot',
-                                      visualDensity: VisualDensity.compact,
-                                      iconSize: 16,
-                                      onPressed: _isSending
-                                          ? null
-                                          : () => setState(
-                                              () => _picked.remove(file),
-                                            ),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                        ],
+            Padding(
+              // Inside the Chat tab, stay clear of the floating tab bar
+              // unless the keyboard is up (the tab bar is behind it then).
+              padding: EdgeInsets.fromLTRB(
+                12,
+                0,
+                12,
+                widget.embedded && View.of(context).viewInsets.bottom == 0
+                    ? 100
+                    : 12,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(30),
+                  border: Border.all(
+                    color: isDark
+                        ? AppColors.darkBorder
+                        : AppColors.deepBlue.withValues(alpha: 0.08),
+                  ),
+                  boxShadow: AppShadows.card,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: 'Add a screenshot',
+                      child: InkWell(
+                        onTap: _isSending ? null : _pickScreenshots,
+                        customBorder: const CircleBorder(),
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: AppColors.teal.withValues(
+                            alpha: 0.12,
+                          ),
+                          child: const Icon(
+                            Icons.add_rounded,
+                            color: AppColors.teal,
+                          ),
+                        ),
                       ),
                     ),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      IconButton(
-                        tooltip: 'Add a screenshot',
-                        onPressed: _isSending ? null : _pickScreenshots,
-                        icon: Icon(
-                          Icons.add_photo_alternate_outlined,
-                          color: isDark ? AppColors.tealLight : AppColors.deepBlue,
-                        ),
-                      ),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: isDark ? AppColors.darkSurface : Colors.white,
-                            borderRadius: BorderRadius.circular(28),
+                    const Gap(8),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        minLines: 1,
+                        maxLines: 5,
+                        style: theme.textTheme.bodyMedium,
+                        decoration: InputDecoration(
+                          hintText: 'Message Gideon',
+                          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                            color: muted,
                           ),
-                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-                          child: TextField(
-                            controller: _controller,
-                            minLines: 1,
-                            maxLines: 5,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: isDark
-                                  ? AppColors.darkForeground
-                                  : AppColors.foreground,
-                            ),
-                            decoration: InputDecoration(
-                              hintText: isSyncingConversation
-                                  ? 'Conversation is syncing... you can still type'
-                                  : 'Message mentor',
-                              hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                                color: isDark
-                                    ? AppColors.darkMutedForeground
-                                    : AppColors.mutedForeground,
-                              ),
-                              border: InputBorder.none,
-                            ),
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 12,
                           ),
                         ),
                       ),
-                      const Gap(10),
-                      InkWell(
+                    ),
+                    const Gap(8),
+                    Semantics(
+                      button: true,
+                      label: 'Send',
+                      child: InkWell(
                         onTap: _isSending ? null : _submit,
-                        borderRadius: BorderRadius.circular(999),
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: isDark ? AppColors.teal : AppColors.deepBlue,
-                            shape: BoxShape.circle,
+                        customBorder: const CircleBorder(),
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: AppColors.teal.withValues(
+                            alpha: _isSending ? 0.6 : 1,
                           ),
-                          alignment: Alignment.center,
-                          child: Opacity(
-                            opacity: _isSending ? 0.6 : 1,
-                            child: const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                            ),
+                          child: const Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 20,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
-        ),
-      ),
+        );
+
+    if (widget.embedded) return content;
+    return AppScreen(
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(bottom: false, child: content),
     );
   }
 
@@ -1893,13 +1598,6 @@ class _MentorReplyNotificationCard extends StatelessWidget {
   }
 }
 
-MentorChatMessage? _latestMentorChat(List<MentorChatMessage> messages) {
-  if (messages.isEmpty) return null;
-  final sorted = [...messages]
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-  return sorted.first;
-}
-
 Future<void> _openCommunitySpace(
   BuildContext context,
   CommunitySpaceModel space,
@@ -2043,187 +1741,6 @@ class _CommunitySpaceTile extends StatelessWidget {
   }
 }
 
-class _ConnectedFeatureCard extends StatelessWidget {
-  const _ConnectedFeatureCard({
-    required this.icon,
-    required this.accent,
-    required this.title,
-    required this.eyebrow,
-    required this.description,
-    required this.onTap,
-    this.badge,
-  });
-
-  final IconData icon;
-  final Color accent;
-  final String title;
-  final String eyebrow;
-  final String description;
-  final VoidCallback onTap;
-  final String? badge;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(26),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: isDark
-              ? const Color(0xFF111C2E)
-              : Colors.white.withValues(alpha: 0.96),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(
-            color: accent.withValues(alpha: isDark ? 0.34 : 0.14),
-          ),
-          boxShadow: isDark
-              ? null
-              : [
-                  BoxShadow(
-                    color: accent.withValues(alpha: 0.08),
-                    blurRadius: 24,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(icon, color: accent, size: 18),
-                ),
-                const Spacer(),
-                if (badge != null)
-                  Flexible(
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: accent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          badge!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          softWrap: false,
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
-                                color: accent,
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const Gap(12),
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const Gap(4),
-            Text(
-              eyebrow,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: accent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const Gap(6),
-            Text(
-              description,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: _contextMutedColor(context),
-                height: 1.52,
-              ),
-            ),
-            const Gap(12),
-            Row(
-              children: [
-                Text(
-                  'Open',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: accent,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Gap(6),
-                Icon(Icons.arrow_outward_rounded, size: 16, color: accent),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CommunityHeroStat extends StatelessWidget {
-  const _CommunityHeroStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.darkMutedForeground,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const Gap(6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 Color _communityAccent(String? category) {
   final normalized = (category ?? '').trim().toLowerCase();
   if (normalized.contains('discord')) return const Color(0xFF6366F1);
@@ -2236,43 +1753,6 @@ Color _contextMutedColor(BuildContext context) {
   return Theme.of(context).brightness == Brightness.dark
       ? AppColors.darkMutedForeground
       : AppColors.mutedForeground;
-}
-
-class _MentorHeaderPill extends StatelessWidget {
-  const _MentorHeaderPill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: Colors.white.withValues(alpha: 0.82)),
-          const Gap(8),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Colors.white.withValues(alpha: 0.86),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _MentorIntroBubble extends StatelessWidget {
@@ -2384,7 +1864,7 @@ class _MentorChatBubble extends StatelessWidget {
     final isMine = message.isMine;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bubbleColor = isMine
-        ? (isDark ? AppColors.deepBlueLight : AppColors.deepBlue)
+        ? (isDark ? AppColors.tealDark : AppColors.teal)
         : (isDark ? AppColors.darkSurface : AppColors.surface);
     final radius = isMine
         ? const BorderRadius.only(
