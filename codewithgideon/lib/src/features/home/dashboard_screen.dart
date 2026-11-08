@@ -608,18 +608,16 @@ class _QuickActions extends StatelessWidget {
       (Icons.groups_outlined, 'Group', () => context.go('/community')),
     ];
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         for (final (icon, label, onTap) in actions)
-          Semantics(
-            button: true,
-            label: label,
-            excludeSemantics: true,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(20),
-              child: SizedBox(
-                width: 76,
+          Expanded(
+            child: Semantics(
+              button: true,
+              label: label,
+              excludeSemantics: true,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(20),
                 child: Column(
                   children: [
                     Container(
@@ -638,6 +636,7 @@ class _QuickActions extends StatelessWidget {
                     Text(
                       label,
                       maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
