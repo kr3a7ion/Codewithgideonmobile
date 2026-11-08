@@ -2,6 +2,7 @@ import 'package:codewithgideon/src/core/models/learning_models.dart';
 import 'package:codewithgideon/src/features/catalog/models/course_model.dart';
 import 'package:codewithgideon/src/features/catalog/models/path_model.dart';
 import 'package:codewithgideon/src/features/cohorts/models/active_cohort_model.dart';
+import 'package:codewithgideon/src/features/classes/learn_screen.dart';
 import 'package:codewithgideon/src/features/home/dashboard_screen.dart';
 import 'package:codewithgideon/src/features/home/models/student_dashboard_snapshot.dart';
 import 'package:codewithgideon/src/features/home/state/dashboard_provider.dart';
@@ -86,6 +87,28 @@ void main() {
 
     expect(find.text('Gideon Student'), findsOneWidget);
     expect(find.text('of 12'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('learn tab shows the week timeline and locked weeks', (
+    tester,
+  ) async {
+    await configureSurface(tester);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          dashboardSnapshotProvider.overrideWithValue(
+            AsyncData(buildDashboardSnapshot()),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: LearnScreen())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Week 4'), findsOneWidget);
+    expect(find.text('Weeks 5 to 12 are locked'), findsOneWidget);
+    expect(find.text('Add weeks'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

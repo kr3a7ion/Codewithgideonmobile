@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/legacy.dart';
 
-enum ClassTab { upcoming, live, completed }
+enum ClassTab { classes, recordings, resources }
 
-final classTabProvider = StateProvider<ClassTab>((ref) => ClassTab.upcoming);
-final classSearchProvider = StateProvider<String>((ref) => '');
+final classTabProvider = StateProvider<ClassTab>(
+  (ref) => ClassTab.classes,
+);

@@ -6,6 +6,7 @@ import '../core/state/app_providers.dart';
 import '../core/widgets/app_scaffold.dart';
 // ...existing code...
 import '../features/classes/class_screens.dart';
+import '../features/classes/learn_screen.dart';
 import '../features/community/community_screens.dart';
 import '../features/community/models/mentor_request_model.dart';
 import '../features/entry/entry_screens.dart';
@@ -220,7 +221,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/classes',
-                builder: (context, state) => const ClassListScreen(),
+                builder: (context, state) => const LearnScreen(),
               ),
             ],
           ),
