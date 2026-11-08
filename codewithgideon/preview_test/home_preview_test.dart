@@ -42,6 +42,15 @@ void main() {
         ..addFont(Future.value(ByteData.sublistView(font.readAsBytesSync())));
       await loader.load();
     }
+    final root = Platform.environment['FLUTTER_ROOT'] ?? '';
+    final icons = File(
+      '$root/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
+    );
+    if (icons.existsSync()) {
+      final loader = FontLoader('MaterialIcons')
+        ..addFont(Future.value(ByteData.sublistView(icons.readAsBytesSync())));
+      await loader.load();
+    }
   });
 
   testWidgets('home', (tester) async {
@@ -114,7 +123,9 @@ void main() {
         ),
       ),
     );
-    await tester.pump(const Duration(seconds: 2));
+    for (var i = 0; i < 30; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     await expectLater(
       find.byType(DashboardScreen),
       matchesGoldenFile('out/home.png'),
