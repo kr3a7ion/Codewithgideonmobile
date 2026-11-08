@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/course_ring.dart';
+import '../../core/widgets/sign_up_progress.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -672,51 +673,22 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         children: [
           _AuthBackdrop(),
           SafeArea(
-            top: false,
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Gap(10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.teal.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.auto_awesome_rounded,
-                          size: 18,
-                          color: AppColors.teal,
-                        ),
-                        const Gap(8),
-                        Text(
-                          'Start Your Journey',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: AppColors.deepBlue),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Gap(16),
+                  _BackCircle(onTap: () => context.go('/welcome')),
+                  const Gap(18),
                   Text(
-                    'Create Account',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    'Create your account',
+                    style: Theme.of(context).textTheme.displaySmall,
                   ),
                   const Gap(8),
                   Text(
-                    'Begin your learning adventure with CodeWithGideon.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    'Then tell us about you and choose your weeks.',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: AppColors.mutedForeground,
                     ),
                   ),
@@ -1245,6 +1217,42 @@ class _ContinueRegistrationScreenState
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
+    final theme = Theme.of(context);
+
+    Widget chips(
+      String label,
+      List<String> options,
+      String value,
+      ValueChanged<String> onSelected,
+    ) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Gap(8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final option in options)
+                ChoiceChip(
+                  label: Text(option),
+                  selected: option == value,
+                  showCheckmark: false,
+                  selectedColor: AppColors.teal.withValues(alpha: 0.14),
+                  shape: const StadiumBorder(),
+                  onSelected: (_) => onSelected(option),
+                ),
+            ],
+          ),
+        ],
+      );
+    }
 
     return AppScreen(
       resizeToAvoidBottomInset: true,
@@ -1252,80 +1260,31 @@ class _ContinueRegistrationScreenState
         children: [
           _AuthBackdrop(),
           SafeArea(
-            top: false,
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  IconButton(
-                    onPressed: () =>
-                        ref.read(authControllerProvider.notifier).logout(),
-                    icon: const Icon(Icons.arrow_back_rounded),
+                  Row(
+                    children: [
+                      // Leaving sign-up here signs out, as before.
+                      _BackCircle(
+                        onTap: () =>
+                            ref.read(authControllerProvider.notifier).logout(),
+                      ),
+                      const Gap(12),
+                      const Expanded(child: SignUpProgress(step: 1)),
+                    ],
                   ),
                   const Gap(18),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.teal.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.assignment_ind_rounded,
-                          size: 18,
-                          color: AppColors.teal,
-                        ),
-                        const Gap(8),
-                        Text(
-                          'Step 2 of 2',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: AppColors.deepBlue),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Gap(16),
-                  Text(
-                    'Complete Your Registration',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  Text('Tell us about you', style: theme.textTheme.displaySmall),
                   const Gap(8),
                   Text(
-                    'Add your learning details, then choose whether to pay now or continue later from your dashboard.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    'So Gideon knows who is in class, and can reach you on WhatsApp.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
                       color: AppColors.mutedForeground,
-                      height: 1.55,
-                    ),
-                  ),
-                  const Gap(24),
-                  AppCard(
-                    color: AppColors.teal.withValues(alpha: 0.05),
-                    border: Border.all(
-                      color: AppColors.teal.withValues(alpha: 0.14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Account',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const Gap(10),
-                        Text(
-                          authState.session?.email ?? 'No email found',
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                      ],
+                      height: 1.5,
                     ),
                   ),
                   if (_submitError != null) ...[
@@ -1335,130 +1294,84 @@ class _ContinueRegistrationScreenState
                       tone: _AuthStatusTone.error,
                     ),
                   ],
-                  const Gap(22),
+                  const Gap(20),
                   AppTextField(
-                    label: 'Full Name',
-                    hint: 'Enter your full name',
+                    label: 'Full name',
+                    hint: 'Your full name',
                     controller: _fullNameController,
                     prefixIcon: Icons.person_outline_rounded,
                   ),
-                  const Gap(18),
+                  const Gap(14),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.mail_outline_rounded,
+                        size: 18,
+                        color: AppColors.mutedForeground,
+                      ),
+                      const Gap(8),
+                      Expanded(
+                        child: Text(
+                          authState.session?.email ?? 'No email found',
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Gap(14),
                   AppTextField(
-                    label: 'Phone Number',
-                    hint: 'e.g. +234 800 000 0000',
+                    label: 'WhatsApp number',
+                    hint: '0803 000 0000',
                     controller: _phoneController,
                     keyboardType: TextInputType.phone,
-                    prefixIcon: Icons.phone_outlined,
+                    prefixIcon: Icons.phone_android_rounded,
                   ),
-                  const Gap(18),
-                  _DropdownField<String>(
-                    label: 'Learning Path',
-                    value: _selectedPath,
-                    items: _paths,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() => _selectedPath = value);
-                    },
-                  ),
-                  const Gap(18),
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final stackFields = constraints.maxWidth < 430;
-                      final ageField = _DropdownField<String>(
-                        label: 'Age Range',
-                        value: _selectedAgeRange,
-                        items: _ageRanges,
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() => _selectedAgeRange = value);
-                        },
-                      );
-                      final genderField = _DropdownField<String>(
-                        label: 'Gender',
-                        value: _selectedGender,
-                        items: _genders,
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() => _selectedGender = value);
-                        },
-                      );
-
-                      if (stackFields) {
-                        return Column(
-                          children: [ageField, const Gap(18), genderField],
-                        );
-                      }
-
-                      return Row(
-                        children: [
-                          Expanded(child: ageField),
-                          const Gap(14),
-                          Expanded(child: genderField),
-                        ],
-                      );
-                    },
-                  ),
-                  const Gap(18),
-                  AppTextField(
-                    label: 'Weeks To Commit',
-                    hint: 'How many weeks do you want to unlock now?',
-                    controller: _weeksController,
-                    keyboardType: TextInputType.number,
-                    prefixIcon: Icons.calendar_month_outlined,
-                  ),
-                  const Gap(18),
-                  AppCard(
-                    color: AppColors.deepBlue.withValues(alpha: 0.05),
-                    border: Border.all(
-                      color: AppColors.deepBlue.withValues(alpha: 0.12),
+                  if (_paths.length > 1) ...[
+                    const Gap(18),
+                    chips(
+                      'What do you want to learn?',
+                      _paths,
+                      _selectedPath,
+                      (value) => setState(() => _selectedPath = value),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'What happens next',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w800),
-                        ),
-                        const Gap(12),
-                        for (final item in const [
-                          'We save your profile securely.',
-                          'Your path is linked to the current active cohort.',
-                          'Payment unlocks your classes immediately after confirmation.',
-                        ])
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Icon(
-                                  Icons.check_circle_rounded,
-                                  size: 18,
-                                  color: AppColors.teal,
-                                ),
-                                const Gap(10),
-                                Expanded(child: Text(item)),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
+                  ],
+                  const Gap(18),
+                  chips(
+                    'Age range',
+                    _ageRanges,
+                    _selectedAgeRange,
+                    (value) => setState(() => _selectedAgeRange = value),
                   ),
-                  const Gap(22),
+                  const Gap(18),
+                  chips(
+                    'Gender',
+                    _genders,
+                    _selectedGender,
+                    (value) => setState(() => _selectedGender = value),
+                  ),
+                  const Gap(28),
                   AppButton(
-                    label: 'Save And Pay Now',
+                    label: 'Continue',
+                    trailing: const Icon(
+                      Icons.arrow_forward_rounded,
+                      color: Colors.white,
+                    ),
                     isLoading: _submitting,
                     onPressed: _submitting
                         ? null
                         : () => _saveRegistration(continueToPayment: true),
                   ),
-                  const Gap(12),
-                  AppButton(
-                    label: 'Save And Go To Dashboard',
-                    variant: AppButtonVariant.outline,
-                    onPressed: _submitting
-                        ? null
-                        : () => _saveRegistration(continueToPayment: false),
+                  const Gap(6),
+                  Center(
+                    child: TextButton(
+                      onPressed: _submitting
+                          ? null
+                          : () => _saveRegistration(continueToPayment: false),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.teal,
+                      ),
+                      child: const Text('Save and pay later'),
+                    ),
                   ),
                 ],
               ),
@@ -1693,56 +1606,6 @@ class _SlideData {
   final String description;
   final IconData icon;
   final List<Color> colors;
-}
-
-class _DropdownField<T> extends StatelessWidget {
-  const _DropdownField({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final String label;
-  final T value;
-  final List<T> items;
-  final ValueChanged<T?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const Gap(10),
-        DropdownButtonFormField<T>(
-          initialValue: value,
-          isExpanded: true,
-          menuMaxHeight: 320,
-          items: items
-              .map(
-                (item) => DropdownMenuItem<T>(
-                  value: item,
-                  child: Text(
-                    item.toString(),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ),
-              )
-              .toList(),
-          onChanged: onChanged,
-          decoration: const InputDecoration(),
-          borderRadius: BorderRadius.circular(20),
-        ),
-      ],
-    );
-  }
 }
 
 enum _AuthStatusTone { error, success, info }

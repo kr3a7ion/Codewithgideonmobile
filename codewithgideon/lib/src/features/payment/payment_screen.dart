@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_paystack_plus/flutter_paystack_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -12,6 +11,8 @@ import '../../core/config/payment_config.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
+import '../../core/widgets/course_ring.dart';
+import '../../core/widgets/sign_up_progress.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../entry/state/auth_provider.dart';
 import '../home/state/dashboard_provider.dart';
@@ -34,6 +35,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   late final TextEditingController _weeksController;
   bool _hasSeededWeeks = false;
   bool _processing = false;
+
+  /// Second step: the summary and the Pay button.
+  bool _reviewing = false;
   bool _paymentCompleted = false;
 
   /// Paystack has charged the card and the app is confirming it with the
@@ -129,107 +133,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                       parent: BouncingScrollPhysics(),
                     ),
                     padding: EdgeInsets.fromLTRB(22, 30, 22, bottomPadding),
-                    children: [
-                      PremiumPageHeader(
-                        leading: PremiumIconButton(
-                          icon: Icons.arrow_back_rounded,
-                          onTap: _handleExit,
-                        ),
-                        title: checkout.kind.title,
-                      ),
-                      const Gap(24),
-                      _PaymentHero(checkout: checkout, pricing: pricing),
-                      const Gap(18),
-                      if (checkout.hasMatchingPendingPayment)
-                        _PendingPaymentCard(checkout: checkout),
-                      if (checkout.hasMatchingPendingPayment) const Gap(18),
-                      AppCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Weeks to unlock',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                            const Gap(8),
-                            Text(
-                              checkout.kind == PaymentFlowKind.topUp
-                                  ? 'You already have ${checkout.committedWeeks} week(s). Choose how many more weeks to unlock now.'
-                                  : 'Choose the number of weeks you want to unlock for this registration.',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: _muted(context)),
-                            ),
-                            const Gap(18),
-                            AppTextField(
-                              label: 'Weeks',
-                              hint: 'Enter number of weeks',
-                              controller: _weeksController,
-                              keyboardType: TextInputType.number,
-                              prefixIcon: Icons.calendar_month_rounded,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                              onChanged: (_) => setState(() {}),
-                            ),
-                            const Gap(14),
-                            _WeekStepper(
-                              value: requestedWeeks.clamp(
-                                checkout.maxAllowedWeeks <= 0 ? 0 : 1,
-                                checkout.maxAllowedWeeks <= 0
-                                    ? 0
-                                    : checkout.maxAllowedWeeks,
-                              ),
-                              canDecrease: requestedWeeks > 1,
-                              canIncrease:
-                                  checkout.maxAllowedWeeks > 0 &&
-                                  requestedWeeks < checkout.maxAllowedWeeks,
-                              onDecrease: () =>
-                                  _adjustWeeks(checkout, delta: -1),
-                              onIncrease: () =>
-                                  _adjustWeeks(checkout, delta: 1),
-                            ),
-                            const Gap(10),
-                            Text(
-                              checkout.kind == PaymentFlowKind.topUp
-                                  ? 'Available range: 1 to ${checkout.maxAllowedWeeks} week(s)'
-                                  : 'Available range: 1 to ${checkout.totalProgramWeeks} week(s)',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: _muted(context),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                            if (!isWeeksValid) ...[
-                              const Gap(10),
-                              Text(
-                                checkout.maxAllowedWeeks == 0
-                                    ? 'All program weeks are already unlocked.'
-                                    : 'Enter a value between 1 and ${checkout.maxAllowedWeeks}.',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: AppColors.danger),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const Gap(18),
-                      _PaymentSummaryCard(pricing: pricing),
-                      const Gap(24),
-                      AppButton(
-                        label:
-                            '${checkout.kind.actionLabel} • ${_formatNaira(pricing.totalPrice)}',
-                        isLoading: _processing,
-                        onPressed: !isWeeksValid || _processing
-                            ? null
-                            : () => _startPayment(checkout, pricing),
-                      ),
-                      const Gap(12),
-                      TextButton(
-                        onPressed: _processing ? null : _handleExit,
-                        child: const Text('Cancel'),
-                      ),
-                    ],
+                    children: _reviewing
+                        ? _reviewStep(checkout, pricing, isWeeksValid)
+                        : _weeksStep(checkout, pricing, requestedWeeks),
                   ),
                 );
               },
@@ -242,6 +148,312 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
         ],
       ),
     );
+  }
+
+
+  /// Header shared by both steps: back button, and the sign-up progress for
+  /// a first payment ("2 of 3", "3 of 3").
+  Widget _stepHeader(PaymentCheckoutModel checkout, String title, int step) {
+    final theme = Theme.of(context);
+    final showProgress = checkout.kind == PaymentFlowKind.initial;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Semantics(
+              button: true,
+              label: 'Back',
+              child: InkWell(
+                onTap: _processing ? null : _handleExit,
+                customBorder: const CircleBorder(),
+                child: CircleAvatar(
+                  radius: 22,
+                  backgroundColor: theme.cardColor,
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+            ),
+            if (showProgress) ...[
+              const Gap(12),
+              Expanded(child: SignUpProgress(step: step)),
+            ],
+          ],
+        ),
+        const Gap(18),
+        Text(title, style: theme.textTheme.displaySmall),
+      ],
+    );
+  }
+
+  List<Widget> _weeksStep(
+    PaymentCheckoutModel checkout,
+    PaymentPriceBreakdown pricing,
+    int requestedWeeks,
+  ) {
+    final theme = Theme.of(context);
+    final max = checkout.maxAllowedWeeks;
+    final weeks = max <= 0 ? 0 : requestedWeeks.clamp(1, max);
+    final isTopUp = checkout.kind == PaymentFlowKind.topUp;
+    final already = isTopUp ? checkout.committedWeeks : 0;
+    final total = checkout.totalProgramWeeks < 1
+        ? 1
+        : checkout.totalProgramWeeks;
+    final ring = List<CourseWeekState>.generate(total, (i) {
+      if (i < already) return CourseWeekState.done;
+      if (i < already + weeks) return CourseWeekState.unlocked;
+      return CourseWeekState.locked;
+    });
+    final quick = <int>{
+      if (max >= 4) 4,
+      if (max >= 8) 8,
+      if (max > 0) max,
+    }.toList()..sort();
+
+    return [
+      _stepHeader(checkout, isTopUp ? 'Add weeks' : 'How many weeks?', 2),
+      const Gap(18),
+      AppCard(
+        radius: 24,
+        padding: const EdgeInsets.all(18),
+        shadow: AppShadows.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              checkout.course.title.toUpperCase(),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: AppColors.teal,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
+              ),
+            ),
+            const Gap(6),
+            Text(
+              '$total weeks · live classes, every class recorded',
+              style: theme.textTheme.bodySmall?.copyWith(color: _muted(context)),
+            ),
+            if (checkout.profile.cohortLabel.trim().isNotEmpty) ...[
+              const Gap(6),
+              Text(
+                checkout.profile.cohortLabel,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      if (checkout.hasMatchingPendingPayment) ...[
+        const Gap(14),
+        _PendingPaymentCard(checkout: checkout),
+      ],
+      const Gap(22),
+      Center(
+        child: SizedBox.square(
+          dimension: 190,
+          child: CustomPaint(
+            painter: CourseRingPainter(
+              states: ring,
+              lockedColor: theme.brightness == Brightness.dark
+                  ? AppColors.darkMuted
+                  : const Color(0xFFC9D3E1),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '$weeks',
+                    style: theme.textTheme.displayLarge?.copyWith(
+                      fontSize: 60,
+                      height: 1,
+                    ),
+                  ),
+                  Text(
+                    weeks == 1 ? 'week' : 'weeks',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: _muted(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      const Gap(18),
+      Row(
+        children: [
+          _RoundStep(
+            icon: Icons.remove_rounded,
+            label: 'One week fewer',
+            filled: false,
+            onTap: weeks > 1 ? () => _adjustWeeks(checkout, delta: -1) : null,
+          ),
+          Expanded(
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final option in quick)
+                  ChoiceChip(
+                    label: Text(
+                      option == max && option > 8 ? 'All $option' : '$option',
+                    ),
+                    selected: option == weeks,
+                    showCheckmark: false,
+                    selectedColor: AppColors.teal.withValues(alpha: 0.14),
+                    shape: const StadiumBorder(),
+                    onSelected: (_) => _adjustWeeks(
+                      checkout,
+                      delta: option - weeks,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          _RoundStep(
+            icon: Icons.add_rounded,
+            label: 'One more week',
+            filled: true,
+            onTap: weeks < max ? () => _adjustWeeks(checkout, delta: 1) : null,
+          ),
+        ],
+      ),
+      const Gap(14),
+      Text(
+        max <= 0
+            ? 'All course weeks are already unlocked.'
+            : '${_formatNaira(pricing.weeklyRate)} a week. Add more weeks any time; every class is recorded.',
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodySmall?.copyWith(color: _muted(context)),
+      ),
+      const Gap(28),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              '$weeks ${weeks == 1 ? 'week' : 'weeks'}',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _muted(context),
+              ),
+            ),
+          ),
+          Text(
+            _formatNaira(pricing.totalPrice),
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+      const Gap(12),
+      AppButton(
+        label: 'Continue',
+        trailing: const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+        onPressed: max <= 0 ? null : () => setState(() => _reviewing = true),
+      ),
+    ];
+  }
+
+  List<Widget> _reviewStep(
+    PaymentCheckoutModel checkout,
+    PaymentPriceBreakdown pricing,
+    bool isWeeksValid,
+  ) {
+    final theme = Theme.of(context);
+    final isTopUp = checkout.kind == PaymentFlowKind.topUp;
+    final weeksLabel = isTopUp
+        ? '${pricing.weeks} more (${checkout.committedWeeks + pricing.weeks} of ${checkout.totalProgramWeeks})'
+        : '${pricing.weeks} of ${checkout.totalProgramWeeks}';
+    return [
+      _stepHeader(checkout, 'Review and pay', 3),
+      const Gap(18),
+      AppCard(
+        radius: 24,
+        padding: const EdgeInsets.all(18),
+        shadow: AppShadows.card,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              checkout.course.title,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Gap(10),
+            _SummaryRow(label: 'Weeks', value: weeksLabel),
+            _SummaryRow(
+              label: 'Price a week',
+              value: _formatNaira(pricing.weeklyRate),
+            ),
+            const Divider(height: 24),
+            _SummaryRow(
+              label: 'Total today',
+              value: _formatNaira(pricing.totalPrice),
+              emphasize: true,
+            ),
+          ],
+        ),
+      ),
+      const Gap(14),
+      AppCard(
+        radius: 24,
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: [
+            for (final (icon, text) in const [
+              (Icons.event_available_outlined, 'Live classes and reminders'),
+              (Icons.chat_bubble_outline_rounded, 'Mentor chat with Gideon'),
+              (Icons.groups_outlined, 'Your cohort group'),
+            ])
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Icon(icon, size: 20, color: AppColors.teal),
+                    const Gap(12),
+                    Expanded(child: Text(text, style: theme.textTheme.bodyMedium)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+      const Gap(28),
+      AppButton(
+        label: 'Pay ${_formatNaira(pricing.totalPrice)}',
+        trailing: const Icon(Icons.lock_outline_rounded, color: Colors.white),
+        isLoading: _processing,
+        onPressed: !isWeeksValid || _processing
+            ? null
+            : () => _startPayment(checkout, pricing),
+      ),
+      const Gap(10),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.shield_outlined, size: 16, color: _muted(context)),
+          const Gap(6),
+          Flexible(
+            child: Text(
+              'Secured by Paystack · card, transfer or USSD',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _muted(context),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 
   int _parseWeeks(PaymentCheckoutModel checkout) {
@@ -262,6 +474,10 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   }
 
   void _handleExit() {
+    if (_reviewing) {
+      setState(() => _reviewing = false);
+      return;
+    }
     final fallback = widget.kind == PaymentFlowKind.topUp
         ? '/dashboard'
         : '/continue-registration';
@@ -448,210 +664,6 @@ extension on _PaymentScreenState {
       }
     }
     return false;
-  }
-}
-
-class _PaymentHero extends StatelessWidget {
-  const _PaymentHero({required this.checkout, required this.pricing});
-
-  final PaymentCheckoutModel checkout;
-  final PaymentPriceBreakdown pricing;
-
-  @override
-  Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 360;
-    return Container(
-      padding: EdgeInsets.all(compact ? 20 : 22),
-      decoration: BoxDecoration(
-        gradient: checkout.kind == PaymentFlowKind.topUp
-            ? const LinearGradient(
-                colors: [Color(0xFF0F7C83), Color(0xFF17A0A7)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : AppGradients.primary,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: AppShadows.premium,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            checkout.profile.pathTitle,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.82),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Gap(8),
-          Text(
-            _formatNaira(pricing.totalPrice),
-            style: Theme.of(context).textTheme.displaySmall?.copyWith(
-              fontSize: compact ? 25 : null,
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              height: 1.1,
-            ),
-          ),
-          const Gap(8),
-          Text(
-            '${pricing.weeks} week(s) at ${_formatNaira(pricing.weeklyRate)} per week',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.white.withValues(alpha: 0.92),
-            ),
-          ),
-          const Gap(8),
-          Text(
-            checkout.kind == PaymentFlowKind.topUp
-                ? 'Add more access and keep your class schedule moving.'
-                : 'Your registration is saved. Payment completes your enrollment.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.8),
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PaymentSummaryCard extends StatelessWidget {
-  const _PaymentSummaryCard({required this.pricing});
-
-  final PaymentPriceBreakdown pricing;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Payment summary',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const Gap(16),
-          _SummaryRow(label: 'Weeks', value: '${pricing.weeks}'),
-          _SummaryRow(
-            label: 'Base price',
-            value: _formatNaira(pricing.basePrice),
-          ),
-          const Divider(height: 28),
-          _SummaryRow(
-            label: 'Course total',
-            value: _formatNaira(pricing.totalPrice),
-            emphasize: true,
-          
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WeekStepper extends StatelessWidget {
-  const _WeekStepper({
-    required this.value,
-    required this.canDecrease,
-    required this.canIncrease,
-    required this.onDecrease,
-    required this.onIncrease,
-  });
-
-  final int value;
-  final bool canDecrease;
-  final bool canIncrease;
-  final VoidCallback onDecrease;
-  final VoidCallback onIncrease;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final chipColor = isDark
-        ? AppColors.tealLight.withValues(alpha: 0.14)
-        : AppColors.deepBlue.withValues(alpha: 0.06);
-    final chipText = isDark ? AppColors.darkForeground : AppColors.deepBlueDark;
-
-    return Row(
-      children: [
-        _WeekStepButton(
-          icon: Icons.remove_rounded,
-          enabled: canDecrease,
-          onTap: onDecrease,
-        ),
-        const Gap(12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            color: chipColor,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isDark
-                  ? AppColors.tealLight.withValues(alpha: 0.16)
-                  : Colors.transparent,
-            ),
-          ),
-          child: Text(
-            '$value week${value == 1 ? '' : 's'}',
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: chipText,
-            ),
-          ),
-        ),
-        const Gap(12),
-        _WeekStepButton(
-          icon: Icons.add_rounded,
-          enabled: canIncrease,
-          onTap: onIncrease,
-        ),
-      ],
-    );
-  }
-}
-
-class _WeekStepButton extends StatelessWidget {
-  const _WeekStepButton({
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(16),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: enabled
-              ? (isDark
-                    ? AppColors.tealLight.withValues(alpha: 0.14)
-                    : AppColors.deepBlue.withValues(alpha: 0.08))
-              : (isDark ? AppColors.darkMuted : AppColors.muted),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        alignment: Alignment.center,
-        child: Icon(
-          icon,
-          color: enabled
-              ? (isDark ? AppColors.tealLight : AppColors.deepBlueDark)
-              : _muted(context),
-        ),
-      ),
-    );
   }
 }
 
@@ -947,3 +959,47 @@ const _paymentStages = [
     'We will update your dashboard and admin records right after payment confirmation.',
   ),
 ];
+
+class _RoundStep extends StatelessWidget {
+  const _RoundStep({
+    required this.icon,
+    required this.label,
+    required this.filled,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool filled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Opacity(
+          opacity: enabled ? 1 : 0.4,
+          child: CircleAvatar(
+            radius: 26,
+            backgroundColor: filled
+                ? AppColors.teal
+                : Theme.of(context).cardColor,
+            child: Icon(
+              icon,
+              color: filled
+                  ? Colors.white
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
