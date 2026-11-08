@@ -519,10 +519,14 @@ class AskMentorScreen extends ConsumerStatefulWidget {
     super.key,
     required this.sessionId,
     required this.contextType,
+    this.initialText = '',
   });
 
   final String? sessionId;
   final MentorRequestContext contextType;
+
+  /// Typed into the message box on open, e.g. the moment of a recording.
+  final String initialText;
 
   @override
   ConsumerState<AskMentorScreen> createState() => _AskMentorScreenState();
@@ -531,7 +535,9 @@ class AskMentorScreen extends ConsumerStatefulWidget {
 const _generalMentorSessionId = 'general';
 
 class _AskMentorScreenState extends ConsumerState<AskMentorScreen> {
-  final TextEditingController _controller = TextEditingController();
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
   final List<MentorChatMessage> _optimisticMessages = <MentorChatMessage>[];
   final Set<String> _locallyReadMentorReplyIds = <String>{};
   bool _isSending = false;

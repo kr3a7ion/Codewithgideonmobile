@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:gap/gap.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 import '../../core/models/learning_models.dart';
@@ -359,6 +360,7 @@ class _ProtectedRecordedPlayerState
         controller: controller,
         isWatched: _completed,
         watchedFraction: watchedFraction,
+        durationSeconds: _duration,
         onToggleWatched: _toggleWatched,
       );
     }
@@ -389,6 +391,7 @@ class _ProtectedRecordedPlayerState
           controller: controller,
           isWatched: _completed,
           watchedFraction: watchedFraction,
+          durationSeconds: _duration,
           onToggleWatched: _toggleWatched,
         );
       },
@@ -396,7 +399,9 @@ class _ProtectedRecordedPlayerState
   }
 }
 
-class _RecordedPlayerLayout extends StatelessWidget {
+/// Dark player area on top, a light sheet below with the class details, and
+/// an "Ask about this moment" bar that carries the current playback time.
+class _RecordedPlayerLayout extends StatefulWidget {
   const _RecordedPlayerLayout({
     required this.session,
     required this.relatedResources,
@@ -408,6 +413,7 @@ class _RecordedPlayerLayout extends StatelessWidget {
     required this.controller,
     required this.isWatched,
     required this.watchedFraction,
+    required this.durationSeconds,
     required this.onToggleWatched,
     this.isFullscreen = false,
   });
@@ -423,269 +429,298 @@ class _RecordedPlayerLayout extends StatelessWidget {
   final bool isFullscreen;
   final bool isWatched;
   final double watchedFraction;
+  final int durationSeconds;
   final VoidCallback onToggleWatched;
+
+  @override
+  State<_RecordedPlayerLayout> createState() => _RecordedPlayerLayoutState();
+}
+
+class _RecordedPlayerLayoutState extends State<_RecordedPlayerLayout> {
+  int _tab = 0;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final session = widget.session;
+    final controller = widget.controller;
 
-    return SafeArea(
-      top: false,
-      bottom: false,
+    final playerArea = AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const ColoredBox(color: AppColors.deepBlue),
+          if (widget.player != null)
+            widget.player!
+          else
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Text(
+                  widget.isPlayable
+                      ? 'Preparing playback...'
+                      : 'This recording is not in a supported YouTube format yet.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          if (widget.player != null && !widget.isLoading && controller != null)
+            Positioned.fill(
+              child: _SecurePlayerOverlay(
+                controller: controller,
+                isDark: true,
+              ),
+            ),
+          if (widget.isLoading)
+            Container(
+              color: AppColors.deepBlue,
+              alignment: Alignment.center,
+              child: Text(
+                'W${session.week}',
+                style: theme.textTheme.displayLarge?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (widget.isFullscreen) return playerArea;
+
+    final notes = session.notes.trim();
+    final resources = widget.relatedResources;
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: ColoredBox(
+      color: AppColors.deepBlue,
       child: Column(
         children: [
-          if (!isFullscreen)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 14),
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Row(
                 children: [
-                  PremiumIconButton(
-                    icon: Icons.arrow_back_rounded,
-                    onTap: () => context.pop(),
-                    isDark: isDark,
-                  ),
-                  const Gap(12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Recorded Session',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: isDark ? Colors.white70 : Colors.black54,
-                            fontWeight: FontWeight.w600,
-                          ),
+                  Semantics(
+                    button: true,
+                    label: 'Back',
+                    child: InkWell(
+                      onTap: () => context.pop(),
+                      customBorder: const CircleBorder(),
+                      child: CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Colors.white.withValues(alpha: 0.14),
+                        child: const Icon(
+                          Icons.arrow_back_rounded,
+                          color: Colors.white,
                         ),
-                        const Gap(2),
-                        Text(
-                          session.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: isDark ? Colors.white : Colors.black,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(
-                  color: isDark
-                      ? const Color(0xFF1A1A1A)
-                      : Colors.grey.shade200,
-                ),
-                if (player != null)
-                  player!
-                else
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        isPlayable
-                            ? 'Preparing secure playback...'
-                            : 'This recording is not in a supported YouTube format yet.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDark ? Colors.white70 : Colors.black54,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                if (player != null && !isLoading && controller != null)
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      ignoring: false,
-                      child: _SecurePlayerOverlay(
-                        controller: controller!,
-                        isDark: isDark,
-                      ),
-                    ),
-                  ),
-                if (isLoading)
-                  Container(
-                    color: isDark
-                        ? const Color(0xFF1A1A1A)
-                        : Colors.grey.shade200,
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const AppShimmerBlock(
-                          width: 84,
-                          height: 84,
-                          radius: 999,
-                        ),
-                        const Gap(14),
-                        Text(
-                          'Loading player...',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: isDark ? Colors.white70 : Colors.black54,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
           ),
-          if (!isFullscreen)
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+          playerArea,
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: theme.scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
                       children: [
-                        _PlayerPill(
-                          icon: Icons.verified_user_rounded,
-                          label: 'In-app playback',
-                          color: AppColors.teal,
-                        ),
-                        const Gap(10),
-                        _PlayerPill(
-                          icon: Icons.calendar_month_rounded,
-                          label: status.scheduleLabel,
-                          color: AppColors.deepBlueLight,
-                        ),
-                      ],
-                    ),
-                    const Gap(18),
-                    Text(
-                      session.pathTitle,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: AppColors.orangeLight,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Gap(6),
-                    Text(
-                      session.title,
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        color: isDark ? Colors.white : Colors.black,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Gap(10),
-                    Text(
-                      session.notes.isEmpty
-                          ? 'Recording is available now. Playback controls stay inside the app and class notes will appear here when they are published.'
-                          : session.notes,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isDark ? Colors.white70 : Colors.black54,
-                        height: 1.65,
-                      ),
-                    ),
-                    const Gap(16),
-                    _WatchProgressRow(
-                      isWatched: isWatched,
-                      fraction: watchedFraction,
-                      onToggle: onToggleWatched,
-                    ),
-                    const Gap(14),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.darkMuted.withValues(alpha: 0.88)
-                            : AppColors.muted.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: AppColors.teal.withValues(alpha: 0.18),
-                        ),
-                      ),
-                      child: Text(
-                        'Playback is locked to the in-app player surface. For stronger protection than YouTube embeds allow, recordings should move to signed private video hosting.',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: isDark
-                              ? AppColors.darkForeground
-                              : AppColors.foreground,
-                          height: 1.55,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Gap(22),
-                    AdaptiveWrap(
-                      minItemWidth: 148,
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _RecordedShortcutCard(
-                          icon: Icons.support_agent_rounded,
-                          accent: AppColors.purple,
-                          title: 'Mentor',
-                          subtitle: 'Ask a follow up',
-                          onTap: () => context.push('/mentor/${session.id}'),
-                        ),
-                      ],
-                    ),
-                    const Gap(22),
-                    Text(
-                      'Session Resources',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Gap(8),
-                    Text(
-                      relatedResources.isEmpty
-                          ? 'No lesson-specific downloads are published yet. Check the main library for shared course materials.'
-                          : 'These files were linked to this recording.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: isDark ? Colors.white70 : Colors.black54,
-                        height: 1.55,
-                      ),
-                    ),
-                    const Gap(14),
-                    if (relatedResources.isEmpty)
-                      _RecordedShortcutCard(
-                        icon: Icons.folder_open_rounded,
-                        accent: AppColors.deepBlue,
-                        title: 'Full Library',
-                        subtitle: 'Browse all published files',
-                        onTap: () => context.push('/resources'),
-                      )
-                    else
-                      for (final resource in relatedResources)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: AppCard(
-                            child: ListTile(
-                              contentPadding: EdgeInsets.zero,
-                              leading: Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: _resourceBadgeColor(resource.type),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: Icon(
-                                  _resourceIcon(resource.type),
-                                  color: _resourceAccentColor(resource.type),
-                                ),
-                              ),
-                              title: Text(resource.name),
-                              subtitle: Text(
-                                '${resource.type} • ${resource.size.isEmpty ? 'Open file' : resource.size} • ${resource.date}',
-                              ),
-                              trailing: const Icon(Icons.open_in_new_rounded),
-                              onTap: () => openCourseResource(context, resource),
+                        Center(
+                          child: Container(
+                            width: 40,
+                            height: 4,
+                            decoration: BoxDecoration(
+                              color: _sheetLine(context),
+                              borderRadius: BorderRadius.circular(999),
                             ),
                           ),
                         ),
-                  ],
+                        const Gap(16),
+                        Text(
+                          'WEEK ${session.week} · RECORDING',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: AppColors.teal,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const Gap(6),
+                        Text(
+                          session.title,
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Gap(14),
+                        _WatchProgressRow(
+                          isWatched: widget.isWatched,
+                          fraction: widget.watchedFraction,
+                          recordedLabel: _recordedLabel(
+                            session,
+                            widget.durationSeconds,
+                          ),
+                          onToggle: widget.onToggleWatched,
+                        ),
+                        const Gap(16),
+                        _SheetTabs(
+                          labels: [
+                            'Notes',
+                            resources.isEmpty
+                                ? 'Resources'
+                                : 'Resources · ${resources.length}',
+                            'Ask',
+                          ],
+                          value: _tab,
+                          onChanged: (index) => setState(() => _tab = index),
+                        ),
+                        const Gap(16),
+                        if (_tab == 0)
+                          Text(
+                            notes.isEmpty
+                                ? 'Class notes will appear here when Gideon adds them.'
+                                : notes,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              height: 1.6,
+                            ),
+                          )
+                        else if (_tab == 1) ...[
+                          for (final resource in resources) ...[
+                            AppCard(
+                              radius: 18,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 4,
+                              ),
+                              child: ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  _resourceIcon(resource.type),
+                                  color: AppColors.teal,
+                                ),
+                                title: Text(
+                                  resource.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  Icons.open_in_new_rounded,
+                                  size: 18,
+                                ),
+                                onTap: () =>
+                                    openCourseResource(context, resource),
+                              ),
+                            ),
+                            const Gap(10),
+                          ],
+                          if (resources.isEmpty)
+                            Text(
+                              'No files for this class yet.',
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          TextButton(
+                            onPressed: () => context.push('/resources'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.teal,
+                            ),
+                            child: const Text('Browse all resources'),
+                          ),
+                        ] else ...[
+                          Text(
+                            'Stuck on part of this class? Ask Gideon. Use the bar below to send the exact moment you are watching.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              height: 1.55,
+                            ),
+                          ),
+                          const Gap(14),
+                          AppButton(
+                            label: 'Open chat with Gideon',
+                            onPressed: () =>
+                                context.push('/mentor/${session.id}'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  _AskAboutMoment(session: session, controller: controller),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+    );
+  }
+}
+
+class _SheetTabs extends StatelessWidget {
+  const _SheetTabs({
+    required this.labels,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<String> labels;
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkMuted : AppColors.muted,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: Semantics(
+                button: true,
+                selected: i == value,
+                child: GestureDetector(
+                  onTap: () => onChanged(i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: i == value
+                          ? Theme.of(context).cardColor
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      labels[i],
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: i == value
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -695,182 +730,233 @@ class _RecordedPlayerLayout extends StatelessWidget {
   }
 }
 
-/// "45% watched · Mark as watched", or "Watched" with an undo.
+/// Opens the chat with the current playback time already typed in.
+class _AskAboutMoment extends StatelessWidget {
+  const _AskAboutMoment({required this.session, required this.controller});
+
+  final CohortSessionModel session;
+  final YoutubePlayerController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = this.controller;
+    final theme = Theme.of(context);
+
+    Widget bar(Duration position) {
+      final seconds = position.inSeconds;
+      return SafeArea(
+        top: false,
+        minimum: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Semantics(
+          button: true,
+          label: seconds > 0
+              ? 'Ask Gideon about ${_formatPlaybackClock(position)}'
+              : 'Ask Gideon about this class',
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: () => context.push(
+              seconds > 0
+                  ? '/mentor/${session.id}?at=$seconds'
+                  : '/mentor/${session.id}',
+            ),
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 6, 6, 6),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: _sheetLine(context)),
+                boxShadow: AppShadows.card,
+              ),
+              child: Row(
+                children: [
+                  if (seconds > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.orange.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.schedule_rounded,
+                            size: 15,
+                            color: AppColors.orange,
+                          ),
+                          const Gap(4),
+                          Text(
+                            _formatPlaybackClock(position),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: AppColors.orange,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Gap(10),
+                  ] else
+                    const Gap(10),
+                  Expanded(
+                    child: Text(
+                      seconds > 0
+                          ? 'Ask about this moment'
+                          : 'Ask Gideon about this class',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _sheetMuted(context),
+                      ),
+                    ),
+                  ),
+                  const CircleAvatar(
+                    radius: 22,
+                    backgroundColor: AppColors.teal,
+                    child: Icon(Icons.send_rounded, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (controller == null) return bar(Duration.zero);
+    return ValueListenableBuilder<YoutubePlayerValue>(
+      valueListenable: controller,
+      builder: (context, value, _) => bar(value.position),
+    );
+  }
+}
+
+String _recordedLabel(CohortSessionModel session, int durationSeconds) {
+  final date = DateFormat('d MMM').format(session.startsAt);
+  if (durationSeconds <= 0) return 'Recorded $date';
+  final minutes = (durationSeconds / 60).round();
+  final length = minutes >= 60
+      ? '${minutes ~/ 60} h ${(minutes % 60).toString().padLeft(2, '0')}'
+      : '$minutes min';
+  return 'Recorded $date · $length';
+}
+
+Color _sheetLine(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? AppColors.darkBorder
+    : const Color(0xFFC9D3E1);
+
+Color _sheetMuted(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? AppColors.darkMutedForeground
+    : AppColors.mutedForeground;
+
+/// A small ring with the percent, the date, and a Watched toggle.
 class _WatchProgressRow extends StatelessWidget {
   const _WatchProgressRow({
     required this.isWatched,
     required this.fraction,
+    required this.recordedLabel,
     required this.onToggle,
   });
 
   final bool isWatched;
   final double fraction;
+  final String recordedLabel;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final percent = (fraction * 100).round();
-    final label = isWatched
-        ? 'Watched'
-        : percent > 0
-        ? '$percent% watched'
-        : 'Not started';
-    return AppCard(
-      radius: 20,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final percent = isWatched ? 100 : (fraction * 100).round();
+    return Row(
+      children: [
+        SizedBox.square(
+          dimension: 38,
+          child: Stack(
+            alignment: Alignment.center,
             children: [
-              Icon(
-                isWatched
-                    ? Icons.check_circle_rounded
-                    : Icons.play_circle_outline_rounded,
-                color: isWatched ? AppColors.teal : AppColors.deepBlueLight,
-                size: 20,
+              CircularProgressIndicator(
+                value: isWatched ? 1 : fraction,
+                strokeWidth: 3,
+                color: AppColors.teal,
+                backgroundColor: _sheetLine(context),
               ),
-              const Gap(10),
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              TextButton(
-                onPressed: onToggle,
-                child: Text(
-                  isWatched ? 'Mark as not watched' : 'Mark as watched',
+              Text(
+                '$percent',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.teal,
                 ),
               ),
             ],
           ),
-          const Gap(8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: isWatched ? 1 : fraction,
-              minHeight: 6,
-              color: AppColors.teal,
-              backgroundColor: isDark
-                  ? Colors.white.withValues(alpha: 0.12)
-                  : AppColors.muted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlayerPill extends StatelessWidget {
-  const _PlayerPill({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Flexible(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.16),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: 0.24)),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const Gap(8),
-            Flexible(
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isDark ? Colors.white : AppColors.foreground,
-                  fontWeight: FontWeight.w700,
+        const Gap(12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isWatched
+                    ? 'Watched'
+                    : percent > 0
+                    ? '$percent% watched'
+                    : 'Not started',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RecordedShortcutCard extends StatelessWidget {
-  const _RecordedShortcutCard({
-    required this.icon,
-    required this.accent,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color accent;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(22),
-      child: AppCard(
-        radius: 22,
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: accent.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(14),
+              Text(
+                recordedLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: _sheetMuted(context),
+                ),
               ),
-              alignment: Alignment.center,
-              child: Icon(icon, color: accent, size: 20),
-            ),
-            const Gap(12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+        ),
+        Semantics(
+          button: true,
+          toggled: isWatched,
+          label: isWatched ? 'Watched. Tap to undo' : 'Mark as watched',
+          excludeSemantics: true,
+          child: InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: isWatched ? AppColors.teal : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: isWatched ? AppColors.teal : _sheetLine(context),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Icon(
+                    Icons.check_rounded,
+                    size: 16,
+                    color: isWatched ? Colors.white : AppColors.teal,
                   ),
-                  const Gap(4),
+                  const Gap(6),
                   Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? AppColors.darkMutedForeground
-                          : AppColors.mutedForeground,
+                    'Watched',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: isWatched ? Colors.white : AppColors.teal,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_rounded, color: accent, size: 18),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }

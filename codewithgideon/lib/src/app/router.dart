@@ -271,6 +271,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => AskMentorScreen(
           sessionId: state.pathParameters['sessionId']!,
           contextType: MentorRequestContext.recorded,
+          initialText: momentPrefix(state.uri.queryParameters['at']),
         ),
       ),
       GoRoute(
@@ -337,4 +338,16 @@ String _initialPaymentLocation() {
 
 bool _pendingEnrollmentAllowedLocation(String location) {
   return location == '/dashboard' || location == '/profile';
+}
+
+/// "At 31:40: " for a question about a moment in a recording, so Gideon sees
+/// the time in the message itself. Empty when there is no valid time.
+String momentPrefix(String? seconds) {
+  final total = int.tryParse(seconds ?? '');
+  if (total == null || total <= 0) return '';
+  final h = total ~/ 3600;
+  final m = (total % 3600) ~/ 60;
+  final s = (total % 60).toString().padLeft(2, '0');
+  final clock = h > 0 ? '$h:${m.toString().padLeft(2, '0')}:$s' : '$m:$s';
+  return 'At $clock: ';
 }
