@@ -121,9 +121,29 @@ class _MainNavigationShellState extends ConsumerState<MainNavigationShell> {
     ref.watch(mentorReplyNotificationListenerProvider);
     _preloadIfNeeded();
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return AppScreen(
       extendBody: true,
-      body: widget.navigationShell,
+      // Light teal wash at the top fading into the page colour.
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: isDark
+              ? null
+              : LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0, 0.45],
+                  colors: [
+                    Color.alphaBlend(
+                      AppColors.teal.withValues(alpha: 0.10),
+                      AppColors.background,
+                    ),
+                    AppColors.background,
+                  ],
+                ),
+        ),
+        child: widget.navigationShell,
+      ),
       bottomNavigationBar: PremiumBottomNav(
         currentIndex: widget.navigationShell.currentIndex,
         onTap: (index) {

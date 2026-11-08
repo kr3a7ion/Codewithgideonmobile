@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,10 +12,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
-import '../catalog/models/course_model.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
+import '../community/models/mentor_request_model.dart';
 import '../community/state/community_notifications_provider.dart';
+import '../community/state/mentor_request_provider.dart';
 import '../recorded/data/watch_progress_repository.dart';
 import '../student/models/pending_payment_model.dart';
 import 'models/student_dashboard_snapshot.dart';
@@ -49,7 +52,7 @@ class DashboardScreen extends ConsumerWidget {
           isSyncing: showSyncing,
           syncErrorMessage: syncError == null
               ? null
-              : 'Some dashboard sections could not refresh just now. Showing your last synced view.',
+              : 'Some sections could not refresh just now. Showing your last synced view.',
         ),
       );
     }
@@ -62,9 +65,9 @@ class DashboardScreen extends ConsumerWidget {
         child: SafeArea(
           child: AppErrorState(
             compact: true,
-            title: 'Dashboard unavailable',
+            title: 'Today is unavailable',
             message:
-                'We could not load your student dashboard right now. Please try again.',
+                'We could not load your classes right now. Please try again.',
             onRetry: () => ref.refresh(dashboardSnapshotProvider),
           ),
         ),
@@ -88,130 +91,53 @@ class _DashboardContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final snapshot = this.snapshot;
-    final heroSession = snapshot.heroSession;
-
     return SafeArea(
-      top: false,
       bottom: false,
       child: RefreshIndicator(
-        // Pull-to-refresh should trigger a fresh Firebase-backed dashboard read.
         onRefresh: () => ref.refresh(dashboardSnapshotProvider.future),
-        color: AppColors.deepBlue,
-        child: CustomScrollView(
+        color: AppColors.teal,
+        child: ListView(
           physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics(),
           ),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(22, 30, 22, 132),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _DashboardHeader(snapshot: snapshot),
-                    const Gap(20),
-                    if (isSyncing || syncErrorMessage != null) ...[
-                      _DashboardSyncBanner(
-                        isSyncing: isSyncing,
-                        message: syncErrorMessage,
-                      ),
-                      const Gap(16),
-                    ],
-                    _DashboardHero(
-                      snapshot: snapshot,
-                      onPrimaryAction: snapshot.hasAnyPending
-                          ? null
-                          : _shouldOpenRecording(heroSession)
-                          ? () => context.push('/recorded/${heroSession!.id}')
-                          : _shouldJoinLiveClass(heroSession)
-                          ? () => _openJoinLink(context, heroSession!.joinUrl)
-                          : _isUpcomingJoinableSession(heroSession)
-                          ? null
-                          : () => context.go('/classes'),
-                    ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.04),
-                    _ContinueWatching(snapshot: snapshot),
-                    const Gap(28),
-                    _SectionHeading(
-                      title: 'Quick Summary',
-                      actionLabel: null,
-                      onAction: null,
-                    ),
-                    const Gap(14),
-                    _SummaryGrid(snapshot: snapshot),
-                    if (_shouldShowInitialPaymentPrompt(snapshot)) ...[
-                      const Gap(16),
-                      _InitialPaymentActionButton(snapshot: snapshot),
-                    ],
-                    if (snapshot.canTopUp) ...[
-                      const Gap(16),
-                      _TopUpActionButton(snapshot: snapshot),
-                    ],
-                    if (snapshot.profile.pendingPayment != null) ...[
-                      const Gap(20),
-                      _PendingPaymentStrip(snapshot: snapshot),
-                    ],
-                    const Gap(26),
-                    _SectionHeading(
-                      title: 'Latest Classes',
-                      actionLabel: snapshot.unlockedSessions.isNotEmpty
-                          ? 'View All'
-                          : null,
-                      onAction: () => _handlePrimaryAction(context, snapshot),
-                    ),
-                    const Gap(14),
-                    _SessionShelf(
-                      sessions: snapshot.previewSessions,
-                      emptyTitle: snapshot.hasAnyPending
-                          ? 'Access is locked'
-                          : 'No published classes yet',
-                      emptyMessage: snapshot.hasAnyPending
-                          ? 'Classes appear here once your payment is approved.'
-                          : 'Your admin has not published a class for your paid weeks yet.',
-                    ),
-
-                    const Gap(28),
-                    _SectionHeading(
-                      title: 'Roadmap',
-                      actionLabel: null,
-                      onAction: null,
-                    ),
-                    const Gap(14),
-                    _CourseRoadmap(snapshot: snapshot),
-
-                    const Gap(8),
-                  ],
-                ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+          children: [
+            _DashboardHeader(snapshot: snapshot),
+            if (isSyncing || syncErrorMessage != null) ...[
+              const Gap(14),
+              _DashboardSyncBanner(
+                isSyncing: isSyncing,
+                message: syncErrorMessage,
               ),
-            ),
+            ],
+            const Gap(8),
+            _CourseRing(
+              snapshot: snapshot,
+            ).animate().fadeIn(duration: 320.ms).scale(begin: const Offset(0.96, 0.96)),
+            const Gap(22),
+            if (_shouldShowInitialPaymentPrompt(snapshot)) ...[
+              _InitialPaymentActionButton(snapshot: snapshot),
+              const Gap(16),
+            ],
+            if (snapshot.profile.pendingPayment != null) ...[
+              _PendingPaymentStrip(snapshot: snapshot),
+              const Gap(16),
+            ],
+            if (!snapshot.hasAnyPending) ...[
+              _ClassCard(snapshot: snapshot),
+              const Gap(24),
+            ],
+            const _QuickActions(),
+            if (snapshot.canTopUp) ...[
+              const Gap(20),
+              _TopUpActionButton(snapshot: snapshot),
+            ],
+            _ContinueWatching(snapshot: snapshot),
+            const _LatestFromGideon(),
           ],
         ),
       ),
     );
-  }
-
-  void _handlePrimaryAction(
-    BuildContext context,
-    StudentDashboardSnapshot snapshot,
-  ) {
-    context.go('/classes');
-  }
-
-  bool _shouldOpenRecording(CohortSessionModel? heroSession) {
-    if (heroSession == null) return false;
-    final status = resolveSessionStatus(heroSession);
-    return status.actionState == SessionActionState.watchRecording;
-  }
-
-  bool _shouldJoinLiveClass(CohortSessionModel? heroSession) {
-    if (heroSession == null || !heroSession.hasJoinUrl) return false;
-    return isSessionLive(heroSession);
-  }
-
-  bool _isUpcomingJoinableSession(CohortSessionModel? heroSession) {
-    if (heroSession == null || !heroSession.hasJoinUrl) return false;
-    final status = resolveSessionStatus(heroSession);
-    return status.actionState == SessionActionState.startsSoon;
   }
 }
 
@@ -229,37 +155,26 @@ class _DashboardHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final initials = _initials(snapshot.profile.fullName);
-    final greetingMood = _timeGreetingMood();
-    final unreadCountAsync = ref.watch(unreadMessagesCountProvider);
+    final unread = ref
+        .watch(unreadMessagesCountProvider)
+        .maybeWhen(data: (count) => count, orElse: () => 0);
 
     return Row(
       children: [
-        Material(
-          color: Colors.transparent,
+        Semantics(
+          button: true,
+          label: 'Your profile',
           child: InkWell(
             onTap: () => context.go('/profile'),
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: isDark
-                    ? const LinearGradient(
-                        colors: [Color(0xFF324565), Color(0xFF18243A)],
-                      )
-                    : const LinearGradient(
-                        colors: [AppColors.deepBlueLight, AppColors.teal],
-                      ),
-              ),
-              alignment: Alignment.center,
+            customBorder: const CircleBorder(),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: AppColors.teal,
               child: Text(
-                initials,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: AppColors.darkForeground,
-                  fontWeight: FontWeight.w700,
+                _initials(snapshot.profile.fullName),
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -270,290 +185,210 @@ class _DashboardHeader extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Text(
-                    'Welcome',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: isDark
-                          ? AppColors.darkMutedForeground
-                          : AppColors.mutedForeground,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Gap(8),
-                  _GreetingMoodGlyph(mood: greetingMood),
-                ],
+              Text(
+                _greeting(DateTime.now()),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: _muted(context),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const Gap(2),
               Text(
                 snapshot.profile.fullName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
-        const Gap(12),
-        _IconBubble(
-          icon: Icons.notifications_none_rounded,
-          badgeCount: unreadCountAsync.maybeWhen(
-            data: (count) => count,
-            orElse: () => 0,
+        Semantics(
+          button: true,
+          label: unread > 0 ? '$unread new notifications' : 'Notifications',
+          child: InkWell(
+            onTap: () => context.push('/community/messages'),
+            customBorder: const CircleBorder(),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                shape: BoxShape.circle,
+                boxShadow: AppShadows.card,
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Icon(Icons.notifications_none_rounded, size: 22),
+                  if (unread > 0)
+                    const Positioned(
+                      top: 11,
+                      right: 12,
+                      child: CircleAvatar(
+                        radius: 4,
+                        backgroundColor: AppColors.orange,
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-          // Keep the bell tied to the dedicated notifications inbox.
-          onTap: () => context.push('/community/messages'),
         ),
       ],
     );
   }
 }
 
-class _DashboardHero extends StatelessWidget {
-  const _DashboardHero({required this.snapshot, required this.onPrimaryAction});
+/// The course at a glance: one ring segment per week.
+class _CourseRing extends StatelessWidget {
+  const _CourseRing({required this.snapshot});
 
   final StudentDashboardSnapshot snapshot;
-  final VoidCallback? onPrimaryAction;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 340;
-    final heroSession = snapshot.heroSession;
-    final heroStatusLabel = heroSession == null
-        ? null
-        : _heroStatusLabel(snapshot, heroSession);
-    final accentLabel = snapshot.hasAnyPending
-        ? 'Payment Update'
-        : snapshot.path.title;
-    final headline = snapshot.hasAnyPending
-        ? 'Classes unlock after approval'
-        : heroSession == null
-        ? 'Coming Soon'
-        : heroSession.title;
-    final caption = snapshot.hasAnyPending
-        ? 'Your schedule becomes active automatically once payment is confirmed.'
-        : heroSession == null
-        ? 'Your admin has not published a session for your paid weeks yet.'
-        : _heroScheduleLabel(heroSession);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 20, 18, 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        gradient: isDark
-            ? const LinearGradient(
-                colors: [
-                  Color(0xFF07101F),
-                  Color(0xFF0C1A30),
-                  Color(0xFF14294B),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              )
-            : const LinearGradient(
-                colors: [
-                  Color.fromARGB(255, 253, 239, 230),
-                  Color.fromARGB(255, 219, 232, 255),
-                  Color.fromARGB(255, 208, 238, 236),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-        boxShadow: [
-          BoxShadow(
-            color: (isDark ? Colors.black : AppColors.deepBlue).withValues(
-              alpha: isDark ? 0.18 : 0.08,
-            ),
-            blurRadius: 30,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          if (compact)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeroTextBlock(
-                  accentLabel: accentLabel,
-                  headline: headline,
-                  caption: caption,
-                  heroStatusLabel: heroStatusLabel,
-                  showHeroTiming:
-                      !snapshot.hasAnyPending && heroSession != null,
-                ),
-                const Gap(12),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _HeroIllustration(isPending: snapshot.hasAnyPending),
-                ),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: _HeroTextBlock(
-                    accentLabel: accentLabel,
-                    headline: headline,
-                    caption: caption,
-                    heroStatusLabel: heroStatusLabel,
-
-                    showHeroTiming:
-                        !snapshot.hasAnyPending && heroSession != null,
-                  ),
-                ),
-                const Gap(8),
-                _HeroIllustration(isPending: snapshot.hasAnyPending),
-              ],
-            ),
-          if (snapshot.hasAnyPending || heroSession != null) ...[
-            const Gap(18),
-            // Keep the primary hero action full-width so it reads like the web CTA.
-            AppButton(
-              expanded: true,
-              label: snapshot.hasAnyPending
-                  ? 'Await Approval'
-                  : _shouldWatchRecording(heroSession)
-                  ? 'Watch Recorded Session'
-                  : _isUpcomingJoinableSession(heroSession)
-                  ? 'Class Starts Soon'
-                  : _shouldJoinLiveClass(heroSession)
-                  ? 'Join live class'
-                  : 'View All Classes',
-              leading: Icon(
-                snapshot.hasAnyPending
-                    ? Icons.lock_rounded
-                    : _shouldWatchRecording(heroSession)
-                    ? Icons.play_circle_rounded
-                    : _isUpcomingJoinableSession(heroSession)
-                    ? Icons.timer_rounded
-                    : _shouldJoinLiveClass(heroSession)
-                    ? Icons.play_circle_rounded
-                    : Icons.menu_book_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-              onPressed: onPrimaryAction,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  String _heroScheduleLabel(CohortSessionModel heroSession) {
-    final status = resolveSessionStatus(heroSession);
-    if (status.actionState == SessionActionState.joinLive) {
-      return 'Live now • ${status.scheduleLabel}';
-    }
-    if (status.actionState == SessionActionState.watchRecording) {
-      return 'Recording is ready • ${status.scheduleLabel}';
-    }
-    return buildClassStartEstimate(heroSession);
-  }
-
-  String _heroStatusLabel(
-    StudentDashboardSnapshot snapshot,
-    CohortSessionModel heroSession,
-  ) {
-    final status = resolveSessionStatus(heroSession);
-    if (status.actionState == SessionActionState.joinLive) {
-      return 'Live now';
-    }
-    if (status.actionState == SessionActionState.watchRecording) {
-      return 'Recording ready';
-    }
-    if (snapshot.nextSession?.id == heroSession.id &&
-        status.countdownLabel != null) {
-      return status.countdownLabel!;
-    }
-    return 'Latest class';
-  }
-
-  bool _shouldWatchRecording(CohortSessionModel? heroSession) {
-    if (heroSession == null) return false;
-    final status = resolveSessionStatus(heroSession);
-    return status.actionState == SessionActionState.watchRecording;
-  }
-
-  bool _shouldJoinLiveClass(CohortSessionModel? heroSession) {
-    if (heroSession == null || !heroSession.hasJoinUrl) return false;
-    final status = resolveSessionStatus(heroSession);
-    return status.actionState == SessionActionState.joinLive;
-  }
-
-  bool _isUpcomingJoinableSession(CohortSessionModel? heroSession) {
-    if (heroSession == null || !heroSession.hasJoinUrl) return false;
-    final status = resolveSessionStatus(heroSession);
-    return status.actionState == SessionActionState.startsSoon;
-  }
-}
-
-class _HeroTextBlock extends StatelessWidget {
-  const _HeroTextBlock({
-    required this.accentLabel,
-    required this.headline,
-    required this.caption,
-    required this.heroStatusLabel,
-
-    required this.showHeroTiming,
-  });
-
-  final String accentLabel;
-  final String headline;
-  final String caption;
-  final String? heroStatusLabel;
-  final bool showHeroTiming;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final states = snapshot.weekStates;
+    final current = snapshot.currentWeek;
+    final done = states.where((s) => s == CourseWeekState.done).length;
+    final unlocked = states.where((s) => s == CourseWeekState.unlocked).length;
+    final locked = _lockedColor(context);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          accentLabel,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: isDark ? AppColors.tealLight : AppColors.deepBlue,
-            fontWeight: FontWeight.w700,
+        Semantics(
+          label: current == null
+              ? 'Your weeks unlock once payment is confirmed'
+              : 'Week $current of ${states.length}',
+          child: SizedBox.square(
+            dimension: 236,
+            child: CustomPaint(
+              painter: _RingPainter(states: states, lockedColor: locked),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'WEEK',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: AppColors.teal,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.6,
+                      ),
+                    ),
+                    Text(
+                      current == null ? '–' : '$current',
+                      style: theme.textTheme.displayLarge?.copyWith(
+                        fontSize: 72,
+                        height: 1,
+                      ),
+                    ),
+                    const Gap(4),
+                    Text(
+                      'of ${states.length}',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: _muted(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-        const Gap(8),
-        if (showHeroTiming && heroStatusLabel != null) ...[
-          _HeroTimingPill(label: heroStatusLabel!),
-          const Gap(10),
-        ],
-
-        const Gap(8),
-
-        Text(
-          headline,
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-            color: isDark ? AppColors.darkForeground : AppColors.foreground,
+        const Gap(14),
+        if (current == null)
+          Text(
+            'Your weeks unlock once payment is confirmed',
+            style: theme.textTheme.bodySmall?.copyWith(color: _muted(context)),
+          )
+        else
+          Wrap(
+            spacing: 16,
+            alignment: WrapAlignment.center,
+            children: [
+              _LegendDot(color: AppColors.teal, label: '$done done'),
+              const _LegendDot(color: AppColors.orange, label: 'Now'),
+              if (unlocked > 0)
+                _LegendDot(
+                  color: AppColors.tealLight,
+                  label: '$unlocked unlocked',
+                ),
+            ],
           ),
-        ),
-        const Gap(8),
+      ],
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  _RingPainter({required this.states, required this.lockedColor});
+
+  final List<CourseWeekState> states;
+  final Color lockedColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const stroke = 22.0;
+    final rect = (Offset.zero & size).deflate(stroke / 2);
+    final count = states.length;
+    // Gap between segments, in radians; none when the course is one week.
+    final gap = count > 1 ? 0.07 : 0.0;
+    final sweep = 2 * math.pi / count;
+    for (var i = 0; i < count; i++) {
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke
+        ..color = switch (states[i]) {
+          CourseWeekState.done => AppColors.teal,
+          CourseWeekState.current => AppColors.orange,
+          CourseWeekState.unlocked => AppColors.tealLight.withValues(
+            alpha: 0.6,
+          ),
+          CourseWeekState.locked => lockedColor,
+        };
+      canvas.drawArc(
+        rect,
+        -math.pi / 2 + i * sweep + gap / 2,
+        sweep - gap,
+        false,
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) =>
+      old.lockedColor != lockedColor || !_sameStates(old.states, states);
+
+  static bool _sameStates(List<CourseWeekState> a, List<CourseWeekState> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CircleAvatar(radius: 4, backgroundColor: color),
+        const Gap(6),
         Text(
-          caption,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: isDark
-                ? AppColors.darkMutedForeground
-                : AppColors.mutedForeground,
-            height: 1.4,
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: _muted(context),
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -561,240 +396,288 @@ class _HeroTextBlock extends StatelessWidget {
   }
 }
 
-class _HeroIllustration extends StatelessWidget {
-  const _HeroIllustration({required this.isPending});
-
-  final bool isPending;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 360;
-    final width = compact ? 108.0 : 128.0;
-    final height = compact ? 118.0 : 136.0;
-
-    // The illustration keeps the reference's playful balance without requiring
-    // a third-party asset or mismatching the current brand system.
-    return SizedBox(
-      width: width,
-      height: height,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            right: 8,
-            bottom: 14,
-            child: Container(
-              width: 94,
-              height: 62,
-              decoration: BoxDecoration(
-                color: (isDark ? AppColors.orangeLight : AppColors.orange)
-                    .withValues(alpha: isDark ? 0.32 : 0.24),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 10,
-            bottom: 24,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: (isDark ? Colors.white : AppColors.deepBlue).withValues(
-                  alpha: isDark ? 0.12 : 0.08,
-                ),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            right: 14,
-            child: Icon(
-              isPending
-                  ? Icons.lock_rounded
-                  : Icons.menu_book_rounded,
-              size: 34,
-              color: isDark ? AppColors.tealLight : AppColors.deepBlue,
-            ),
-          ),
-          Positioned(
-            top: 18,
-            right: 20,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? AppColors.deepBlueLight.withValues(alpha: 0.8)
-                    : AppColors.teal.withValues(alpha: 0.16),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 28,
-            right: 30,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.teal : AppColors.deepBlue,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.school_rounded,
-                color: Colors.white,
-                size: 28,
-              ),
-            ),
-          ),
-          Positioned(
-            top: 64,
-            right: 52,
-            child: Transform.rotate(
-              angle: -0.2,
-              child: Container(
-                width: 44,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.teal.withValues(alpha: 0.92)
-                      : AppColors.teal,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.menu_book_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SessionShelf extends StatelessWidget {
-  const _SessionShelf({
-    required this.sessions,
-    required this.emptyTitle,
-    required this.emptyMessage,
-  });
-
-  final List<CohortSessionModel> sessions;
-  final String emptyTitle;
-  final String emptyMessage;
-
-  @override
-  Widget build(BuildContext context) {
-    if (sessions.isEmpty) {
-      return AppEmptyState(
-        title: emptyTitle,
-        message: emptyMessage,
-        icon: Icons.menu_book_outlined,
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.only(right: 4),
-      child: Row(
-        children: [
-          for (var index = 0; index < sessions.length; index++) ...[
-            _CourseCard(
-              session: sessions[index],
-              onTap: () => context.push('/classes/${sessions[index].id}'),
-            ),
-            if (index != sessions.length - 1) const Gap(14),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CourseRoadmap extends StatelessWidget {
-  const _CourseRoadmap({required this.snapshot});
+/// The live class, the next class, or the latest recording.
+class _ClassCard extends StatelessWidget {
+  const _ClassCard({required this.snapshot});
 
   final StudentDashboardSnapshot snapshot;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 340;
-    final secondaryColor = isDark
-        ? AppColors.darkMutedForeground
-        : AppColors.mutedForeground;
-    final roadmapItems = _buildSyllabusItems(snapshot);
+    final live = snapshot.liveSession;
+    final next = snapshot.nextSession;
+    final recording = snapshot.latestRecordedSession;
+    final now = DateTime.now();
 
-    return _SoftPanel(
+    final Widget pill;
+    final String? trailing;
+    final CohortSessionModel? session;
+    final List<Widget> body;
+    if (live != null) {
+      session = live;
+      pill = const _Pill(label: 'LIVE NOW', color: AppColors.orange, dot: true);
+      final left = live.endsAt.difference(now).inMinutes;
+      trailing = left > 0 ? '$left min left' : null;
+      body = [
+        AppButton(
+          label: 'Join class',
+          leading: const Icon(Icons.videocam_outlined, color: Colors.white),
+          onPressed: live.hasJoinUrl
+              ? () => _openJoinLink(context, live.joinUrl)
+              : null,
+        ),
+      ];
+    } else if (next != null) {
+      session = next;
+      pill = const _Pill(label: 'NEXT CLASS', color: AppColors.teal);
+      trailing = formatSessionWhen(next);
+      body = [
+        if (!next.timeTba) ...[_Countdown(to: next.startsAt), const Gap(14)],
+        AppButton(
+          label: 'Add to calendar',
+          leading: const Icon(Icons.event_available_outlined,
+              color: Colors.white),
+          onPressed: () => _openCalendar(context, next),
+        ),
+      ];
+    } else if (recording != null) {
+      session = recording;
+      pill = const _Pill(label: 'RECORDING READY', color: AppColors.teal);
+      trailing = 'Week ${recording.week}';
+      body = [
+        AppButton(
+          label: 'Watch recording',
+          leading: const Icon(Icons.play_arrow_rounded, color: Colors.white),
+          onPressed: () => context.push('/recorded/${recording.id}'),
+        ),
+      ];
+    } else {
+      session = null;
+      pill = const _Pill(label: 'NO CLASS YET', color: AppColors.teal);
+      trailing = null;
+      body = const [];
+    }
+
+    final sessionId = session?.id;
+    return AppCard(
+      radius: 28,
       padding: const EdgeInsets.all(18),
+      shadow: AppShadows.card,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (compact)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  snapshot.path.title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Gap(10),
-                _StatusPill(
-                  text: snapshot.hasAnyPending ? 'Pending' : 'Active',
-                  tone: snapshot.hasAnyPending
-                      ? AppColors.orange
-                      : AppColors.teal,
-                ),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(
+          Row(
+            children: [
+              pill,
+              const Spacer(),
+              if (trailing != null)
+                Flexible(
                   child: Text(
-                    snapshot.path.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
+                    trailing,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: _muted(context),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-                _StatusPill(
-                  text: snapshot.hasAnyPending ? 'Pending' : 'Active',
-                  tone: snapshot.hasAnyPending
-                      ? AppColors.orange
-                      : AppColors.teal,
-                ),
-              ],
-            ),
-          const Gap(10),
-          Text(
-            'This roadmap mirrors your path syllabus, highlighting your progress and upcoming milestones.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: secondaryColor,
-              height: 1.5,
+            ],
+          ),
+          const Gap(12),
+          InkWell(
+            onTap: sessionId == null
+                ? null
+                : () => context.push('/classes/$sessionId'),
+            child: Text(
+              session?.title ??
+                  'Your next class shows here once Gideon schedules it.',
+              style: session == null
+                  ? theme.textTheme.bodyMedium?.copyWith(color: _muted(context))
+                  : theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
             ),
           ),
-          const Gap(16),
-          for (var index = 0; index < roadmapItems.length; index++) ...[
-            _RoadmapStep(
-              item: roadmapItems[index],
-              isLast: index == roadmapItems.length - 1,
-            ),
-            if (index != roadmapItems.length - 1) const Gap(12),
-          ],
+          if (body.isNotEmpty) ...[const Gap(16), ...body],
         ],
       ),
+    );
+  }
+}
+
+class _Pill extends StatelessWidget {
+  const _Pill({required this.label, required this.color, this.dot = false});
+
+  final String label;
+  final Color color;
+  final bool dot;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: dot ? color : color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (dot) ...[
+            const CircleAvatar(radius: 3.5, backgroundColor: AppColors.deepBlue),
+            const Gap(6),
+          ],
+          Text(
+            label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: dot ? AppColors.deepBlue : color,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Days, hours and minutes until [to]. Refreshes once a minute.
+class _Countdown extends StatelessWidget {
+  const _Countdown({required this.to});
+
+  final DateTime to;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<void>(
+      stream: Stream.periodic(const Duration(minutes: 1)),
+      builder: (context, _) {
+        final left = to.difference(DateTime.now());
+        final safe = left.isNegative ? Duration.zero : left;
+        final parts = [
+          ('${safe.inDays}', 'days'),
+          (safe.inHours.remainder(24).toString().padLeft(2, '0'), 'hrs'),
+          (safe.inMinutes.remainder(60).toString().padLeft(2, '0'), 'min'),
+        ];
+        return Row(
+          children: [
+            for (final (value, unit) in parts) ...[
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.teal.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        value,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                      Text(
+                        unit,
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: _muted(context)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (unit != 'min') const Gap(8),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _QuickActions extends StatelessWidget {
+  const _QuickActions();
+
+  @override
+  Widget build(BuildContext context) {
+    final List<(IconData, String, VoidCallback)> actions = [
+      (Icons.chat_bubble_outline_rounded, 'Ask Gideon', () => context.push('/mentor')),
+      (Icons.calendar_month_outlined, 'Calendar', () => context.go('/classes')),
+      (Icons.menu_book_outlined, 'Resources', () => context.push('/resources')),
+      (Icons.groups_outlined, 'Group', () => context.go('/community')),
+    ];
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        for (final (icon, label, onTap) in actions)
+          Semantics(
+            button: true,
+            label: label,
+            excludeSemantics: true,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(20),
+              child: SizedBox(
+                width: 76,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: AppColors.deepBlue.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Icon(icon, color: AppColors.teal),
+                    ),
+                    const Gap(8),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title, {this.action, this.onAction});
+
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
+        if (action != null)
+          TextButton(
+            onPressed: onAction,
+            style: TextButton.styleFrom(foregroundColor: AppColors.teal),
+            child: Text(action!),
+          ),
+      ],
     );
   }
 }
@@ -848,53 +731,6 @@ class _DashboardSyncBanner extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _SummaryGrid extends StatelessWidget {
-  const _SummaryGrid({required this.snapshot});
-
-  final StudentDashboardSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    return AdaptiveWrap(
-      minItemWidth: 140,
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        _MiniStatCard(
-          label: 'Progress',
-          value: '${(snapshot.progressPercent * 100).round()}%',
-          icon: Icons.trending_up_rounded,
-          tint: AppColors.teal,
-        ),
-        _MiniStatCard(
-          label: 'Unlocked Weeks',
-          value: '${snapshot.paidWeeks} wk',
-          valueSuffix: 'of ${snapshot.totalProgramWeeks} wk',
-          icon: Icons.lock_open_rounded,
-          tint: AppColors.deepBlue,
-        ),
-        _MiniStatCard(
-          label: 'Recordings',
-          value: '${snapshot.recordedLessons.length}',
-          icon: Icons.play_circle_outline_rounded,
-          tint: AppColors.orange,
-        ),
-        _MiniStatCard(
-          label: 'Remaining',
-          value: '${snapshot.remainingWeeks} wk',
-          valueSuffix: snapshot.remainingWeeks == 0
-              ? 'Paid'
-              : _formatNaira(
-                  snapshot.remainingWeeks * snapshot.course.pricePerWeek,
-                ),
-          icon: Icons.schedule_rounded,
-          tint: AppColors.tealDark,
-        ),
-      ],
     );
   }
 }
@@ -1124,1126 +960,6 @@ class _TopUpActionHeader extends StatelessWidget {
   }
 }
 
-class _CourseCard extends StatelessWidget {
-  const _CourseCard({required this.session, required this.onTap});
-
-  final CohortSessionModel session;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final status = resolveSessionStatus(session);
-    final accent = _accentForStatus(status.actionState);
-    final actionLabel = _actionLabelForStatus(status.actionState);
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          width: 224,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF0E1728) : Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: isDark
-                  ? AppColors.darkBorder
-                  : AppColors.deepBlue.withValues(alpha: 0.08),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: (isDark ? Colors.black : AppColors.deepBlue).withValues(
-                  alpha: isDark ? 0.22 : 0.08,
-                ),
-                blurRadius: 24,
-                offset: const Offset(0, 12),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      'Week ${session.week}',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const Gap(8),
-                  Expanded(
-                    child: Text(
-                      status.statusLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: isDark
-                            ? AppColors.darkMutedForeground
-                            : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Gap(12),
-              Container(
-                height: 124,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: accent.withValues(alpha: 0.12)),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(22),
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: _SessionCardArtwork(session: session),
-                      ),
-                      Positioned(
-                        top: 12,
-                        right: 12,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(
-                                    0xFF0F1B2F,
-                                  ).withValues(alpha: 0.92)
-                                : Colors.white.withValues(alpha: 0.94),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: accent.withValues(alpha: 0.16),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                _iconForStatus(status.actionState),
-                                size: 14,
-                                color: accent,
-                              ),
-                              const Gap(6),
-                              Text(
-                                actionLabel,
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(
-                                      color: isDark
-                                          ? AppColors.darkForeground
-                                          : AppColors.deepBlueDark,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const Gap(12),
-              Text(
-                session.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const Gap(6),
-              Row(
-                children: [
-                  Icon(Icons.schedule_rounded, size: 16, color: accent),
-                  const Gap(8),
-                  Expanded(
-                    child: Text(
-                      _formatDateLabel(session),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isDark
-                            ? AppColors.darkMutedForeground
-                            : AppColors.mutedForeground,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Gap(10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? accent.withValues(alpha: 0.14)
-                      : accent.withValues(alpha: 0.09),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        status.scheduleLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(
-                              color: accent,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                    ),
-                    const Gap(10),
-                    Icon(Icons.arrow_outward_rounded, size: 18, color: accent),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _accentForStatus(SessionActionState state) {
-    return switch (state) {
-      SessionActionState.joinLive => AppColors.teal,
-      SessionActionState.startsSoon => AppColors.deepBlue,
-      SessionActionState.watchRecording => AppColors.orange,
-      SessionActionState.awaitingRecording => AppColors.orangeLight,
-      SessionActionState.awaitingJoinLink => AppColors.deepBlueLight,
-    };
-  }
-
-  IconData _iconForStatus(SessionActionState state) {
-    return switch (state) {
-      SessionActionState.joinLive => Icons.podcasts_rounded,
-      SessionActionState.startsSoon => Icons.schedule_send_rounded,
-      SessionActionState.watchRecording => Icons.play_circle_fill_rounded,
-      SessionActionState.awaitingRecording => Icons.movie_creation_outlined,
-      SessionActionState.awaitingJoinLink => Icons.link_rounded,
-    };
-  }
-
-  String _actionLabelForStatus(SessionActionState state) {
-    return switch (state) {
-      SessionActionState.joinLive => 'Join live',
-      SessionActionState.startsSoon => 'Starts soon',
-      SessionActionState.watchRecording => 'Watch now',
-      SessionActionState.awaitingRecording => 'Recording soon',
-      SessionActionState.awaitingJoinLink => 'Open class',
-    };
-  }
-}
-
-class _SessionCardArtwork extends StatelessWidget {
-  const _SessionCardArtwork({required this.session});
-
-  final CohortSessionModel session;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isLive = _isSessionLive(session, DateTime.now());
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: isDark
-            ? const LinearGradient(
-                colors: [Color(0xFF2B3853), Color(0xFF1B2740)],
-              )
-            : const LinearGradient(
-                colors: [Color(0xFFE9F2FB), Color(0xFFF4FBFB)],
-              ),
-      ),
-      child: Stack(
-        children: [
-          Positioned(
-            right: -8,
-            bottom: -12,
-            child: Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: (isLive ? AppColors.teal : AppColors.orange).withValues(
-                  alpha: 0.22,
-                ),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 14,
-            top: 14,
-            child: _Badge(
-              label: isLive ? 'LIVE' : 'WEEK ${session.week}',
-              tint: isLive ? AppColors.teal : AppColors.deepBlue,
-            ),
-          ),
-          Center(
-            child: Icon(
-              session.hasJoinUrl
-                  ? Icons.videocam_rounded
-                  : Icons.school_rounded,
-              size: 44,
-              color: isDark ? AppColors.tealLight : AppColors.deepBlue,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SoftPanel extends StatelessWidget {
-  const _SoftPanel({
-    required this.child,
-    this.padding = const EdgeInsets.all(16),
-  });
-
-  final Widget child;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark
-              ? AppColors.darkBorder
-              : AppColors.deepBlue.withValues(alpha: 0.06),
-        ),
-      ),
-      child: child,
-    );
-  }
-}
-
-class _MiniStatCard extends StatelessWidget {
-  const _MiniStatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.tint,
-    this.valueSuffix,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color tint;
-  final String? valueSuffix;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final compact = MediaQuery.sizeOf(context).width < 340;
-
-    return _SoftPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isDark
-                        ? AppColors.darkMutedForeground
-                        : AppColors.mutedForeground,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Icon(icon, size: 18, color: tint),
-            ],
-          ),
-          const Gap(10),
-          if (compact && valueSuffix != null)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const Gap(4),
-                Text(
-                  valueSuffix!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: isDark
-                        ? AppColors.darkMutedForeground
-                        : AppColors.mutedForeground,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            )
-          else
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Flexible(
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                if (valueSuffix != null) ...[
-                  const Gap(6),
-                  Flexible(
-                    child: Text(
-                      valueSuffix!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: isDark
-                            ? AppColors.darkMutedForeground
-                            : AppColors.mutedForeground,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.text, required this.tone});
-
-  final String text;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: tone == AppColors.orange ? AppColors.foreground : tone,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, required this.tint});
-
-  final String label;
-  final Color tint;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: tint.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: tint == AppColors.orange ? AppColors.foreground : tint,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _IconBubble extends StatelessWidget {
-  const _IconBubble({
-    required this.icon,
-    required this.onTap,
-    this.badgeCount = 0,
-  });
-
-  final IconData icon;
-  final VoidCallback onTap;
-  final int badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark
-                      ? AppColors.darkBorder
-                      : AppColors.deepBlue.withValues(alpha: 0.08),
-                ),
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: isDark ? AppColors.orangeLight : AppColors.deepBlue,
-              ),
-            ),
-            if (badgeCount > 0)
-              Positioned(
-                right: -4,
-                top: -4,
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: AppColors.orange,
-                    borderRadius: BorderRadius.all(Radius.circular(999)),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    badgeCount > 99 ? '99+' : '$badgeCount',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GreetingMoodGlyph extends StatelessWidget {
-  const _GreetingMoodGlyph({required this.mood});
-
-  final _GreetingMood mood;
-
-  @override
-  Widget build(BuildContext context) {
-    // Use a styled icon badge so the greeting feels more premium than raw emoji text.
-    return Container(
-      width: 24,
-      height: 24,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: mood.colors),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: mood.colors.first.withValues(alpha: 0.22),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: Icon(mood.icon, size: 14, color: Colors.white),
-    );
-  }
-}
-
-class _HeroTimingPill extends StatelessWidget {
-  const _HeroTimingPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: (isDark ? Colors.white : AppColors.deepBlue).withValues(
-          alpha: isDark ? 0.08 : 0.08,
-        ),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: (isDark ? AppColors.tealLight : AppColors.deepBlue).withValues(
-            alpha: 0.18,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.timer_rounded,
-            size: 12,
-            color: isDark ? AppColors.tealLight : AppColors.deepBlue,
-          ),
-          const Gap(4),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: isDark ? AppColors.darkForeground : AppColors.warning,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionHeading extends StatelessWidget {
-  const _SectionHeading({
-    required this.title,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ),
-        if (actionLabel != null)
-          TextButton(
-            onPressed: onAction,
-            child: Text(
-              actionLabel!,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: AppColors.orange,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-class _DashboardShimmer extends StatelessWidget {
-  const _DashboardShimmer();
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 132),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: const [
-                    AppShimmerBlock(width: 44, height: 44, radius: 999),
-                    Gap(12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AppShimmerBlock(width: 92, height: 12, radius: 999),
-                          Gap(8),
-                          AppShimmerBlock(width: 168, height: 20, radius: 999),
-                        ],
-                      ),
-                    ),
-                    Gap(12),
-                    AppShimmerBlock(width: 44, height: 44, radius: 16),
-                  ],
-                ),
-                const Gap(20),
-                const AppShimmerBlock(
-                  width: double.infinity,
-                  height: 210,
-                  radius: 30,
-                ),
-                const Gap(26),
-                const Row(
-                  children: [
-                    Expanded(
-                      child: AppShimmerBlock(
-                        width: 180,
-                        height: 28,
-                        radius: 999,
-                      ),
-                    ),
-                  ],
-                ),
-                const Gap(14),
-                const Row(
-                  children: [
-                    Expanded(
-                      child: AppShimmerBlock(
-                        width: 100,
-                        height: 110,
-                        radius: 24,
-                      ),
-                    ),
-                    Gap(12),
-                    Expanded(
-                      child: AppShimmerBlock(
-                        width: 100,
-                        height: 110,
-                        radius: 24,
-                      ),
-                    ),
-                  ],
-                ),
-                const Gap(16),
-                const AppShimmerBlock(
-                  width: double.infinity,
-                  height: 76,
-                  radius: 22,
-                ),
-                const Gap(24),
-                const Row(
-                  children: [
-                    Expanded(
-                      child: AppShimmerBlock(
-                        width: 180,
-                        height: 28,
-                        radius: 999,
-                      ),
-                    ),
-                  ],
-                ),
-                const Gap(14),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: const [
-                      _ShimmerCourseCard(),
-                      Gap(14),
-                      _ShimmerCourseCard(),
-                    ],
-                  ),
-                ),
-                const Gap(28),
-                const AppShimmerBlock(width: 218, height: 28, radius: 999),
-                const Gap(14),
-                const AppShimmerBlock(
-                  width: double.infinity,
-                  height: 236,
-                  radius: 24,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ShimmerCourseCard extends StatelessWidget {
-  const _ShimmerCourseCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(
-      width: 172,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [AppShimmerBlock(width: 172, height: 170, radius: 24)],
-      ),
-    );
-  }
-}
-
-class _RoadmapItem {
-  const _RoadmapItem({
-    required this.weekLabel,
-    required this.title,
-    required this.description,
-    required this.topics,
-    required this.icon,
-    required this.tint,
-    required this.isCurrent,
-    required this.isUnlocked,
-    required this.statusLabel,
-  });
-
-  final String weekLabel;
-  final String title;
-  final String description;
-  final List<String> topics;
-  final IconData icon;
-  final Color tint;
-  final bool isCurrent;
-  final bool isUnlocked;
-  final String statusLabel;
-}
-
-List<_RoadmapItem> _buildSyllabusItems(StudentDashboardSnapshot snapshot) {
-  final syllabusItems = _resolvedSyllabusItems(snapshot);
-  final unlockedWeeks = snapshot.profile.weeksToCommit.clamp(
-    0,
-    syllabusItems.length,
-  );
-
-  return List<_RoadmapItem>.generate(syllabusItems.length, (index) {
-    final week = syllabusItems[index];
-    final weekNumber = week.week;
-    final isUnlocked = weekNumber <= unlockedWeeks;
-    final isCurrent = weekNumber == (unlockedWeeks == 0 ? 1 : unlockedWeeks);
-    final tint = switch (index % 4) {
-      0 => AppColors.deepBlue,
-      1 => AppColors.teal,
-      2 => AppColors.orange,
-      _ => AppColors.deepBlueLight,
-    };
-
-    return _RoadmapItem(
-      weekLabel: 'Week $weekNumber',
-      title: week.title.trim().isNotEmpty ? week.title : 'Week $weekNumber',
-      description: week.topics.isNotEmpty
-          ? '${week.topics.length} topic${week.topics.length == 1 ? '' : 's'}'
-          : 'Weekly learning milestone',
-      topics: week.topics,
-      icon: isUnlocked
-          ? Icons.check_circle_rounded
-          : Icons.radio_button_unchecked_rounded,
-      tint: tint,
-      isCurrent: isCurrent,
-      isUnlocked: isUnlocked,
-      statusLabel: isUnlocked
-          ? 'Unlocked'
-          : isCurrent
-          ? 'Current'
-          : 'Locked',
-    );
-  });
-}
-
-List<CourseSyllabusWeek> _resolvedSyllabusItems(
-  StudentDashboardSnapshot snapshot,
-) {
-  final syllabusItems = snapshot.course.syllabus;
-  if (syllabusItems.isEmpty) return _plainWeeks(snapshot);
-  return syllabusItems;
-}
-
-class _RoadmapStep extends StatelessWidget {
-  const _RoadmapStep({required this.item, required this.isLast});
-
-  final _RoadmapItem item;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final secondaryColor = isDark
-        ? AppColors.darkMutedForeground
-        : AppColors.mutedForeground;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: item.isCurrent
-                    ? item.tint.withValues(alpha: 0.18)
-                    : item.tint.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(item.icon, color: item.tint, size: 20),
-            ),
-            if (!isLast)
-              Container(
-                width: 2,
-                height: 34,
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                color: item.isCurrent
-                    ? item.tint.withValues(alpha: 0.34)
-                    : secondaryColor.withValues(alpha: 0.22),
-              ),
-          ],
-        ),
-        const Gap(14),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.weekLabel,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: item.tint,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0,
-                  ),
-                ),
-                const Gap(4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          color: item.isCurrent ? item.tint : null,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: item.tint.withValues(
-                          alpha: item.isUnlocked ? 0.14 : 0.08,
-                        ),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        item.statusLabel,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: item.tint,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const Gap(6),
-                Text(
-                  item.description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: secondaryColor,
-                    height: 1.5,
-                  ),
-                ),
-                if (item.topics.isNotEmpty) ...[
-                  const Gap(10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: item.topics
-                        .map(
-                          (topic) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: item.tint.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: item.tint,
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                ),
-                                const Gap(8),
-                                Flexible(
-                                  child: Text(
-                                    topic,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: item.tint,
-                                          fontWeight: FontWeight.w700,
-                                          height: 1.4,
-                                        ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-String _initials(String fullName) {
-  final parts = fullName.trim().split(RegExp(r'\s+'));
-  if (parts.isEmpty) return 'CW';
-  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-  return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
-      .toUpperCase();
-}
-
-String _formatDateLabel(CohortSessionModel session) {
-  final now = DateTime.now();
-  if (_isSessionLive(session, now)) return 'Join available now';
-  return formatSessionWhen(session, weekday: false);
-}
-
-bool _isSessionLive(CohortSessionModel session, DateTime now) {
-  return isSessionLive(session, now: now);
-}
-
-String _formatNaira(int amount) {
-  return '₦${NumberFormat.decimalPattern().format(amount)}';
-}
-
-/// No outline saved for the course yet: show plain weeks rather than made-up
-/// topics. Gideon fills the real outline in Admin -> Courses.
-List<CourseSyllabusWeek> _plainWeeks(StudentDashboardSnapshot snapshot) {
-  final weeks = snapshot.totalProgramWeeks < 1
-      ? 1
-      : snapshot.totalProgramWeeks;
-  return List<CourseSyllabusWeek>.generate(
-    weeks,
-    (index) => CourseSyllabusWeek(
-      week: index + 1,
-      title: 'Week ${index + 1}',
-      topics: const [],
-    ),
-  );
-}
-
-_GreetingMood _timeGreetingMood() {
-  final hour = DateTime.now().hour;
-  // Keep greeting visuals consistent with the design system rather than raw emojis.
-  if (hour < 12) {
-    return const _GreetingMood(
-      icon: Icons.waving_hand_rounded,
-      colors: [Color(0xFFFFB347), Color(0xFFFF8A65)],
-    );
-  }
-  if (hour < 17) {
-    return const _GreetingMood(
-      icon: Icons.wb_sunny_rounded,
-      colors: [Color(0xFFFFC857), Color(0xFFFFA86A)],
-    );
-  }
-  if (hour < 21) {
-    return const _GreetingMood(
-      icon: Icons.wb_twilight_rounded,
-      colors: [Color(0xFF4F79C7), Color(0xFF7C9CF5)],
-    );
-  }
-  return const _GreetingMood(
-    icon: Icons.nights_stay_rounded,
-    colors: [Color(0xFF203052), Color(0xFF364A72)],
-  );
-}
-
-class _GreetingMood {
-  const _GreetingMood({required this.icon, required this.colors});
-
-  final IconData icon;
-  final List<Color> colors;
-}
-
-Future<void> _openJoinLink(BuildContext context, String url) async {
-  await _openExternalVideoLink(
-    context,
-    url,
-    invalidMessage: 'Join link is invalid.',
-    failedMessage: 'Could not open the join link.',
-  );
-}
-
-Future<void> _openExternalVideoLink(
-  BuildContext context,
-  String url, {
-  required String invalidMessage,
-  String failedMessage = 'Could not open the video link.',
-}) async {
-  final uri = Uri.tryParse(url);
-  if (uri == null) {
-    showAppSnackBar(context, invalidMessage);
-    return;
-  }
-
-  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-  if (!launched && context.mounted) {
-    showAppSnackBar(context, failedMessage);
-  }
-}
 
 /// Recordings the student started but didn't finish, newest class first.
 /// Hidden when there are none.
@@ -2265,75 +981,364 @@ class _ContinueWatching extends ConsumerWidget {
           final item = progress[session.id];
           return item != null && item.isStarted && !item.completed;
         })
-        .take(3)
+        .take(5)
         .toList();
     if (started.isEmpty) return const SizedBox.shrink();
 
-    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Gap(28),
-        _SectionHeading(
-          title: 'Continue Watching',
-          actionLabel: null,
-          onAction: null,
+        const Gap(24),
+        _SectionTitle(
+          'Continue watching',
+          action: 'All',
+          onAction: () => context.go('/classes'),
         ),
-        const Gap(14),
-        for (final session in started) ...[
-          InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () => context.push('/recorded/${session.id}'),
-            child: AppCard(
-              radius: 20,
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.play_circle_fill_rounded,
-                    color: AppColors.teal,
-                    size: 32,
+        const Gap(8),
+        SizedBox(
+          height: 222,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            itemCount: started.length,
+            separatorBuilder: (_, _) => const Gap(12),
+            itemBuilder: (context, index) => _RecordingTile(
+              session: started[index],
+              progress: progress[started[index].id]!,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RecordingTile extends StatelessWidget {
+  const _RecordingTile({required this.session, required this.progress});
+
+  final CohortSessionModel session;
+  final WatchProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final minutesLeft = progress.duration > 0
+        ? ((progress.duration - progress.position) / 60).ceil()
+        : null;
+    final percent = (progress.fraction * 100).round();
+
+    return Semantics(
+      button: true,
+      label: 'Continue ${session.title}, $percent% watched',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () => context.push('/recorded/${session.id}'),
+        child: Container(
+          width: 280,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: AppShadows.card,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                height: 128,
+                color: AppColors.deepBlue,
+                padding: const EdgeInsets.all(14),
+                child: Stack(
+                  children: [
+                    if (minutesLeft != null && minutesLeft > 0)
+                      Text(
+                        '$minutesLeft min left',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    Positioned(
+                      left: 0,
+                      bottom: 6,
+                      child: Text(
+                        'W${session.week}',
+                        style: theme.textTheme.displayMedium?.copyWith(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Colors.white,
+                        child: Icon(
+                          Icons.play_arrow_rounded,
+                          color: AppColors.deepBlue,
+                          size: 28,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              LinearProgressIndicator(
+                value: progress.fraction,
+                minHeight: 4,
+                color: AppColors.orange,
+                backgroundColor: AppColors.deepBlueLight,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      session.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Gap(2),
+                    Text(
+                      'Week ${session.week} · $percent% watched',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: _muted(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Only Gideon's most recent reply; the full thread lives in Chat.
+class _LatestFromGideon extends ConsumerWidget {
+  const _LatestFromGideon();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final messages = ref
+        .watch(
+          mentorRequestsProvider(
+            const MentorConversationQuery(
+              sessionId: null,
+              conversationId: null,
+            ),
+          ),
+        )
+        .maybeWhen(data: (items) => items, orElse: () => <MentorChatMessage>[]);
+    MentorChatMessage? latest;
+    for (final message in messages) {
+      if (!message.isAdmin) continue;
+      if (latest == null || message.createdAt.isAfter(latest.createdAt)) {
+        latest = message;
+      }
+    }
+    if (latest == null) return const SizedBox.shrink();
+    final reply = latest;
+
+    final theme = Theme.of(context);
+    final body = reply.body.trim().isNotEmpty
+        ? reply.body.trim()
+        : reply.imageUrls.isNotEmpty
+        ? 'Sent a screenshot'
+        : '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Gap(24),
+        const _SectionTitle('Latest from Gideon'),
+        const Gap(10),
+        AppCard(
+          radius: 24,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.deepBlue,
+                child: Text(
+                  'G',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
                   ),
-                  const Gap(12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+              ),
+              const Gap(12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Text(
-                          session.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
+                        Expanded(
+                          child: Text(
+                            'Gideon replied',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                        const Gap(4),
                         Text(
-                          'Week ${session.week} • '
-                          '${(progress[session.id]!.fraction * 100).round()}% watched',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        const Gap(8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: progress[session.id]!.fraction,
-                            minHeight: 5,
-                            color: AppColors.teal,
+                          _timeAgo(reply.createdAt, DateTime.now()),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: _muted(context),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const Gap(8),
-                  const Icon(Icons.chevron_right_rounded),
-                ],
+                    const Gap(4),
+                    Text(
+                      body,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: () => context.push('/mentor'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.teal,
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Text('Reply'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
-          if (session != started.last) const Gap(10),
-        ],
+        ),
       ],
     );
+  }
+}
+
+/// Same shapes as the real screen, so nothing jumps when the data arrives.
+class _DashboardShimmer extends StatelessWidget {
+  const _DashboardShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
+      children: const [
+        Row(
+          children: [
+            AppShimmerBlock(width: 40, height: 40, radius: 999),
+            Gap(12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppShimmerBlock(width: 90, height: 10, radius: 999),
+                Gap(6),
+                AppShimmerBlock(width: 140, height: 14, radius: 999),
+              ],
+            ),
+          ],
+        ),
+        Gap(22),
+        Center(child: AppShimmerBlock(width: 236, height: 236, radius: 999)),
+        Gap(36),
+        AppShimmerBlock(width: double.infinity, height: 170, radius: 28),
+        Gap(24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            AppShimmerBlock(width: 56, height: 56, radius: 20),
+            AppShimmerBlock(width: 56, height: 56, radius: 20),
+            AppShimmerBlock(width: 56, height: 56, radius: 20),
+            AppShimmerBlock(width: 56, height: 56, radius: 20),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+String _initials(String fullName) {
+  final parts = fullName
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return 'CW';
+  if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+  return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'
+      .toUpperCase();
+}
+
+String _greeting(DateTime now) {
+  if (now.hour < 12) return 'Good morning';
+  if (now.hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+String _timeAgo(DateTime time, DateTime now) {
+  final diff = now.difference(time);
+  if (diff.inMinutes < 1) return 'now';
+  if (diff.inHours < 1) return '${diff.inMinutes}m';
+  if (diff.inDays < 1) return '${diff.inHours}h';
+  if (diff.inDays < 7) return '${diff.inDays}d';
+  return DateFormat('MMM d').format(time);
+}
+
+Color _muted(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? AppColors.darkMutedForeground
+    : AppColors.mutedForeground;
+
+Color _lockedColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+    ? AppColors.darkMuted
+    : const Color(0xFFC9D3E1);
+
+String _formatNaira(int amount) {
+  return '₦${NumberFormat.decimalPattern().format(amount)}';
+}
+
+Future<void> _openJoinLink(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null) {
+    showAppSnackBar(context, 'Join link is invalid.');
+    return;
+  }
+  final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!launched && context.mounted) {
+    showAppSnackBar(context, 'Could not open the join link.');
+  }
+}
+
+Future<void> _openCalendar(
+  BuildContext context,
+  CohortSessionModel session,
+) async {
+  var launched = false;
+  try {
+    launched = await launchUrl(
+      addToCalendarUri(session),
+      mode: LaunchMode.externalApplication,
+    );
+  } catch (_) {
+    launched = false;
+  }
+  if (!launched && context.mounted) {
+    showAppSnackBar(context, 'Could not open your calendar.');
   }
 }

@@ -83,6 +83,27 @@ class StudentDashboardSnapshot {
     return liveSession ?? nextSession ?? latestUnlockedSession;
   }
 
+  /// The week the student is on: the live or next class, else the last paid
+  /// week. Null while payment is pending.
+  int? get currentWeek {
+    if (hasAnyPending || paidWeeks == 0) return null;
+    final week = (liveSession ?? nextSession)?.week ?? paidWeeks;
+    return week.clamp(1, totalProgramWeeks < 1 ? 1 : totalProgramWeeks);
+  }
+
+  /// One entry per course week, for the course ring on Today.
+  List<CourseWeekState> get weekStates {
+    final current = currentWeek;
+    return List.generate(totalProgramWeeks < 1 ? 1 : totalProgramWeeks, (i) {
+      final week = i + 1;
+      if (week > paidWeeks) return CourseWeekState.locked;
+      if (current == null) return CourseWeekState.unlocked;
+      if (week < current) return CourseWeekState.done;
+      if (week == current) return CourseWeekState.current;
+      return CourseWeekState.unlocked;
+    });
+  }
+
   String get heroLabel {
     if (hasAnyPending) return 'Sessions Locked';
     if (liveSession != null) return 'Live Now';
@@ -92,6 +113,8 @@ class StudentDashboardSnapshot {
     return 'Class Status';
   }
 }
+
+enum CourseWeekState { done, current, unlocked, locked }
 
 extension<T> on List<T> {
   T? get firstOrNull => isEmpty ? null : first;

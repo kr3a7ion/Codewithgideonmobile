@@ -1,9 +1,8 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
+/// The floating four-tab bar: Today, Learn, Chat, Me.
 class PremiumBottomNav extends StatelessWidget {
   const PremiumBottomNav({
     super.key,
@@ -14,94 +13,106 @@ class PremiumBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
 
+  static const _items = [
+    (Icons.home_outlined, Icons.home_rounded, 'Today'),
+    (Icons.menu_book_outlined, Icons.menu_book_rounded, 'Learn'),
+    (Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Chat'),
+    (Icons.person_outline_rounded, Icons.person_rounded, 'Me'),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    const items = [
-      _NavItem(Icons.home_rounded),
-      _NavItem(Icons.menu_book_rounded),
-      _NavItem(Icons.groups_rounded),
-      _NavItem(Icons.account_circle_rounded),
-    ];
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SafeArea(
-      minimum: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.88),
-              borderRadius: BorderRadius.circular(26),
-              border: Border.all(
-                color: AppColors.deepBlue.withValues(alpha: 0.06),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.deepBlue.withValues(alpha: 0.06),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
+      minimum: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: Container(
+        height: 72,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(30),
+          border: isDark ? Border.all(color: AppColors.darkBorder) : null,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.deepBlue.withValues(alpha: 0.08),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            for (var i = 0; i < _items.length; i++)
+              Expanded(
+                child: _TabItem(
+                  icon: i == currentIndex ? _items[i].$2 : _items[i].$1,
+                  label: _items[i].$3,
+                  isActive: i == currentIndex,
+                  onTap: () => onTap(i),
                 ),
-              ],
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Row(
-              children: [
-                for (var i = 0; i < items.length; i++)
-                  Expanded(
-                    child: _BottomItemButton(
-                      item: items[i],
-                      isActive: i == currentIndex,
-                      onTap: () => onTap(i),
-                    ),
-                  ),
-              ],
-            ),
-          ),
+              ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _BottomItemButton extends StatelessWidget {
-  const _BottomItemButton({
-    required this.item,
+class _TabItem extends StatelessWidget {
+  const _TabItem({
+    required this.icon,
+    required this.label,
     required this.isActive,
     required this.onTap,
   });
 
-  final _NavItem item;
+  final IconData icon;
+  final String label;
   final bool isActive;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(22),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: isActive
-              ? AppColors.deepBlue.withValues(alpha: 0.08)
-              : Colors.transparent,
-        ),
-        child: Icon(
-          item.icon,
-          color: isActive ? AppColors.deepBlue : AppColors.mutedForeground,
-          size: 24,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final idle = isDark
+        ? AppColors.darkMutedForeground
+        : AppColors.mutedForeground;
+    final active = isDark ? AppColors.tealLight : AppColors.tealDark;
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              width: 52,
+              height: 30,
+              decoration: BoxDecoration(
+                color: isActive
+                    ? AppColors.teal.withValues(alpha: 0.14)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Icon(icon, size: 22, color: isActive ? active : idle),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: isActive ? active : idle,
+                fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-}
-
-class _NavItem {
-  const _NavItem(this.icon);
-
-  final IconData icon;
 }

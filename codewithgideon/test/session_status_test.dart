@@ -102,4 +102,21 @@ void main() {
     );
     expect(done.fraction, 1);
   });
+
+  group('Add to calendar link', () {
+    test('uses UTC start and end times', () {
+      final start = DateTime.utc(2026, 11, 18, 18);
+      final uri = addToCalendarUri(_session(startsAt: start));
+      expect(uri.host, 'calendar.google.com');
+      expect(uri.queryParameters['dates'], '20261118T180000Z/20261118T190000Z');
+      expect(uri.queryParameters['text'], contains('State management'));
+    });
+
+    test('is an all-day event when the time is not set', () {
+      final uri = addToCalendarUri(
+        _session(startsAt: DateTime(2026, 11, 18, 12), timeTba: true),
+      );
+      expect(uri.queryParameters['dates'], '20261118/20261119');
+    });
+  });
 }

@@ -82,8 +82,17 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Welcome'), findsOneWidget);
+    expect(find.text('Gideon Student'), findsOneWidget);
+    expect(find.text('of 12'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  test('course ring marks done, current and locked weeks', () {
+    final states = buildDashboardSnapshot().weekStates;
+    expect(states.length, 12);
+    expect(states.take(3), everyElement(CourseWeekState.done));
+    expect(states[3], CourseWeekState.current);
+    expect(states.skip(4), everyElement(CourseWeekState.locked));
   });
 
   testWidgets('resources library renders folders and list without overflow', (

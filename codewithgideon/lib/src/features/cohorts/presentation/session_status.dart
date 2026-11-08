@@ -171,3 +171,21 @@ bool _isSessionLive(CohortSessionModel session, DateTime now) {
   if (session.timeTba) return false;
   return !session.startsAt.isAfter(now) && !session.endsAt.isBefore(now);
 }
+
+/// A Google Calendar "add event" link for a class. Opens the Calendar app on
+/// Android, or the browser elsewhere; no calendar permission needed.
+Uri addToCalendarUri(CohortSessionModel session) {
+  String stamp(DateTime time) =>
+      '${DateFormat("yyyyMMdd'T'HHmmss").format(time.toUtc())}Z';
+  return Uri.https('calendar.google.com', '/calendar/render', {
+    'action': 'TEMPLATE',
+    'text': 'Code with Gideon: ${session.title}',
+    'dates': session.timeTba
+        ? '${DateFormat('yyyyMMdd').format(session.startsAt)}/'
+              '${DateFormat('yyyyMMdd').format(session.startsAt.add(const Duration(days: 1)))}'
+        : '${stamp(session.startsAt)}/${stamp(session.endsAt)}',
+    'details': session.hasJoinUrl
+        ? 'Join: ${session.joinUrl}'
+        : 'Join from the Code with Gideon app.',
+  });
+}
