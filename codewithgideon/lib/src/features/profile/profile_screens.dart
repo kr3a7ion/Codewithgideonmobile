@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:gap/gap.dart';
@@ -11,6 +13,7 @@ import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../home/models/student_dashboard_snapshot.dart';
+import 'badge_medal.dart';
 
 const _contactLinks =
     <({IconData icon, String title, String subtitle, String url})>[
@@ -165,31 +168,13 @@ class ProfileScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(16),
                           child: Column(
                             children: [
-                              Container(
-                                width: 56,
-                                height: 56,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: badge.earned
-                                      ? AppColors.orange.withValues(alpha: 0.12)
-                                      : (theme.brightness == Brightness.dark
-                                            ? AppColors.darkMuted
-                                            : AppColors.muted),
-                                  border: badge.earned
-                                      ? Border.all(
-                                          color: AppColors.orange,
-                                          width: 2,
-                                        )
-                                      : null,
-                                ),
-                                child: Opacity(
-                                  opacity: badge.earned ? 1 : 0.4,
-                                  child: Text(
-                                    badge.badge,
-                                    style: const TextStyle(fontSize: 24),
-                                  ),
-                                ),
+                              BadgeMedal(
+                                tier: badge.tier,
+                                color: badge.color,
+                                state: badge.earned
+                                    ? MedalState.earned
+                                    : MedalState.locked,
+                                size: 52,
                               ),
                               const Gap(6),
                               Text(
@@ -415,396 +400,310 @@ class _YourWeeksCard extends StatelessWidget {
 
 String _naira(int amount) => '₦${NumberFormat.decimalPattern().format(amount)}';
 
-class CertificatesScreen extends ConsumerWidget {
+/// Badges: one per course week, earned when that week's class has finished
+/// (the same rule and the same medals as the website).
+class CertificatesScreen extends ConsumerStatefulWidget {
   const CertificatesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CertificatesScreen> createState() => _CertificatesScreenState();
+}
+
+class _CertificatesScreenState extends ConsumerState<CertificatesScreen> {
+  @override
+  Widget build(BuildContext context) {
     final dashboardState = ref.watch(dashboardSnapshotProvider);
 
     return dashboardState.when(
       loading: () => const AppScreen(
         body: SafeArea(
-          top: false,
           child: AppLoadingState(
             compact: true,
             title: 'Loading badges...',
-            message: 'Preparing your weekly milestone journey.',
+            message: 'Badges come from your finished classes.',
           ),
         ),
       ),
       error: (error, _) => AppScreen(
         body: SafeArea(
-          top: false,
           child: AppErrorState(
             compact: true,
             title: 'Badges unavailable',
-            message: 'We could not build your weekly badge journey right now.',
+            message: 'We could not load your badges right now.',
             onRetry: () => ref.refresh(dashboardSnapshotProvider),
           ),
         ),
       ),
       data: (dashboard) {
-        final badgeTimeline = _buildWeeklyBadgeTimeline(dashboard);
-        final spotlight = _spotlightBadgeForTimeline(badgeTimeline);
-        final completedWeeks = _completedWeeksForDashboard(dashboard);
-        final totalWeeks = dashboard.totalProgramWeeks <= 0
-            ? 1
-            : dashboard.totalProgramWeeks;
-        final progress = totalWeeks == 0 ? 0.0 : completedWeeks / totalWeeks;
-        final remainingWeeks = (totalWeeks - completedWeeks).clamp(
-          0,
-          totalWeeks,
-        );
-        final earnedBadges = badgeTimeline
-            .where((item) => item.earned)
-            .toList();
-        final nextBadge = badgeTimeline.firstWhere(
-          (item) => !item.earned,
-          orElse: () =>
-              badgeTimeline.isEmpty ? _fallbackBadge() : badgeTimeline.last,
-        );
+        final theme = Theme.of(context);
+        final journey = _BadgeJourney(dashboard);
+        final badges = journey.badges;
+        final earned = journey.earned;
+        final latest = earned > 0 ? badges[earned - 1] : null;
+        final next = earned < badges.length ? badges[earned] : null;
+        final spotlight = latest ?? next ?? badges.first;
+        final percent = (earned / badges.length * 100).round();
 
         return AppScreen(
           body: SafeArea(
-            top: false,
             bottom: false,
             child: ListView(
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
               children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
-                  decoration: BoxDecoration(
-                    gradient: Theme.of(context).brightness == Brightness.dark
-                        ? const LinearGradient(
-                            colors: [
-                              AppColors.deepBlueDark,
-                              Color(0xFF102548),
-                              AppColors.tealDark,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : const LinearGradient(
-                            colors: [
-                              Color(0xFF0E2C63),
-                              Color(0xFF1C4986),
-                              Color(0xFF117781),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                Row(
+                  children: [
+                    Semantics(
+                      button: true,
+                      label: 'Back',
+                      child: InkWell(
+                        onTap: () => context.pop(),
+                        customBorder: const CircleBorder(),
+                        child: CircleAvatar(
+                          radius: 22,
+                          backgroundColor: theme.cardColor,
+                          child: Icon(
+                            Icons.arrow_back_rounded,
+                            color: theme.colorScheme.onSurface,
                           ),
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: AppShadows.premium,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PremiumPageHeader(
-                        title: 'Journey Badges',
-                        subtitle:
-                            'A new badge drops at the end of each completed week, using your real cohort progress.',
-                        onDark: true,
-                        leading: PremiumIconButton(
-                          icon: Icons.arrow_back_rounded,
-                          onTap: () => context.pop(),
-                          isDark: true,
                         ),
                       ),
-                      const Gap(18),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _BadgeHeroStat(
-                              label: 'Completed',
-                              value: '$completedWeeks/$totalWeeks',
-                            ),
-                          ),
-                          const Gap(10),
-                          Expanded(
-                            child: _BadgeHeroStat(
-                              label: 'Earned',
-                              value: '${earnedBadges.length}',
-                            ),
-                          ),
-                          const Gap(10),
-                          Expanded(
-                            child: _BadgeHeroStat(
-                              label: 'Next',
-                              value: 'Wk ${nextBadge.week}',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+                const Gap(16),
+                Text('Badges', style: theme.textTheme.displaySmall),
+                const Gap(6),
+                Text(
+                  'Earn a badge for every week of classes you finish. The same badges show on the website.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: _muted(context),
                   ),
                 ),
                 const Gap(18),
+                // Latest badge and what's next.
                 Container(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+                  clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF111C2E)
-                        : Colors.white.withValues(alpha: 0.96),
-                    borderRadius: BorderRadius.circular(30),
-                    border: Border.all(
-                      color: spotlight.color.withValues(alpha: 0.18),
-                    ),
+                    color: AppColors.deepBlue,
+                    borderRadius: BorderRadius.circular(28),
                   ),
-                  child: Column(
+                  child: Stack(
                     children: [
-                      Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
-                            width: 160,
-                            height: 160,
+                      Positioned(
+                        top: -60,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            width: 260,
+                            height: 260,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: spotlight.color.withValues(alpha: 0.18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: spotlight.color.withValues(
+                                    alpha: latest != null ? 0.32 : 0.16,
+                                  ),
+                                  blurRadius: 90,
+                                ),
+                              ],
                             ),
-                            child: const SizedBox.shrink(),
                           ),
-                          Text(
-                            spotlight.badge,
-                            style: const TextStyle(fontSize: 68, height: 1),
-                          ),
-                        ],
+                        ),
                       ),
-                      const Gap(18),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: spotlight.color.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: spotlight.color.withValues(alpha: 0.34),
-                          ),
-                        ),
-                        child: Text(
-                          'Week ${spotlight.week} · ${spotlight.tier}',
-                          style: Theme.of(context).textTheme.labelSmall
-                              ?.copyWith(
+                      Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          children: [
+                            GestureDetector(
+                              onTap: () =>
+                                  _openBadge(context, journey, spotlight.week),
+                              child: BadgeMedal(
+                                tier: spotlight.tier,
                                 color: spotlight.color,
+                                state: latest != null
+                                    ? MedalState.latest
+                                    : MedalState.next,
+                                size: 148,
+                              ),
+                            ),
+                            const Gap(14),
+                            Text(
+                              latest != null
+                                  ? 'WEEK ${latest.week} BADGE · ${latest.tier.toUpperCase()}'
+                                  : 'YOUR FIRST BADGE',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: AppColors.tealLight,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                            const Gap(6),
+                            Text(
+                              latest?.title ?? '${spotlight.title} is waiting',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                color: Colors.white,
                                 fontWeight: FontWeight.w800,
                               ),
-                        ),
-                      ),
-                      const Gap(12),
-                      Text(
-                        spotlight.title,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const Gap(8),
-                      Text(
-                        '"${spotlight.tagline}"',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _muted(context),
-                          height: 1.6,
-                        ),
-                      ),
-                      const Gap(18),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? AppColors.darkSurface.withValues(alpha: 0.9)
-                              : AppColors.muted.withValues(alpha: 0.72),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: spotlight.color,
-                                  width: 2,
-                                ),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    spotlight.color.withValues(alpha: 0.26),
-                                    spotlight.color.withValues(alpha: 0.08),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              alignment: Alignment.center,
-                              child: const Text(
-                                '👤',
-                                style: TextStyle(fontSize: 18),
+                            ),
+                            const Gap(6),
+                            Text(
+                              latest?.tagline ??
+                                  '${journey.statusOf(spotlight)}.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: Colors.white.withValues(alpha: 0.85),
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const Gap(12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    dashboard.profile.fullName,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleSmall
-                                        ?.copyWith(fontWeight: FontWeight.w800),
+                            const Gap(18),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '$earned of ${badges.length} badges earned',
+                                    style: theme.textTheme.labelLarge?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
-                                  const Gap(6),
-                                  Wrap(
-                                    spacing: 4,
-                                    runSpacing: 4,
-                                    children: earnedBadges.isEmpty
-                                        ? [
+                                ),
+                                Text(
+                                  '$percent%',
+                                  style: theme.textTheme.labelLarge?.copyWith(
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Gap(8),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: earned / badges.length,
+                                minHeight: 8,
+                                color: AppColors.tealLight,
+                                backgroundColor: Colors.white.withValues(
+                                  alpha: 0.15,
+                                ),
+                              ),
+                            ),
+                            if (latest != null && next != null) ...[
+                              const Gap(18),
+                              InkWell(
+                                onTap: () =>
+                                    _openBadge(context, journey, next.week),
+                                borderRadius: BorderRadius.circular(18),
+                                child: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: theme.cardColor,
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: BadgeMedal(
+                                          tier: next.tier,
+                                          color: next.color,
+                                          state: MedalState.next,
+                                          size: 44,
+                                        ),
+                                      ),
+                                      const Gap(12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
                                             Text(
-                                              spotlight.badge,
-                                              style: const TextStyle(
-                                                fontSize: 16,
-                                              ),
+                                              'UP NEXT · WEEK ${next.week}',
+                                              style: theme.textTheme.labelSmall
+                                                  ?.copyWith(
+                                                    color: AppColors.tealLight,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
                                             ),
-                                          ]
-                                        : [
-                                            for (final badge in earnedBadges)
-                                              Text(
-                                                badge.badge,
-                                                style: const TextStyle(
-                                                  fontSize: 16,
-                                                ),
-                                              ),
+                                            Text(
+                                              next.title,
+                                              style: theme.textTheme.titleSmall
+                                                  ?.copyWith(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                            ),
+                                            Text(
+                                              journey.statusOf(next),
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: Colors.white70,
+                                                  ),
+                                            ),
                                           ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right_rounded,
+                                        color: Colors.white70,
+                                      ),
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
-                            ),
+                            ] else if (next == null) ...[
+                              const Gap(18),
+                              Text(
+                                "You've earned every badge. Champion.",
+                                textAlign: TextAlign.center,
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                            if (journey.paymentPending) ...[
+                              const Gap(18),
+                              AppButton(
+                                label: 'Finish payment',
+                                onPressed: () => context.push(
+                                  '/payment?mode=initial&returnTo=%2Fcertificates',
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Gap(18),
-                Row(
-                  children: [
-                    Text(
-                      'All $totalWeeks Weeks',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      completedWeeks == totalWeeks && totalWeeks > 0
-                          ? 'Complete'
-                          : '$remainingWeeks left',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: spotlight.color,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-                const Gap(8),
+                const Gap(24),
                 Text(
-                  'Each badge marks a completed week in your cohort journey.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: _muted(context)),
+                  'Your journey',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const Gap(12),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final maxExtent = totalWeeks <= 4
-                        ? 190.0
-                        : totalWeeks <= 6
-                        ? 156.0
-                        : 132.0;
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: badgeTimeline.length,
-                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: maxExtent,
-                        mainAxisSpacing: 10,
-                        crossAxisSpacing: 10,
-                        mainAxisExtent: 154,
-                      ),
-                      itemBuilder: (context, index) {
-                        final item = badgeTimeline[index];
-                        final isSpotlight = item.week == spotlight.week;
-                        return _WeekBadgeTile(
-                          item: item,
-                          isSpotlight: isSpotlight,
-                        );
-                      },
-                    );
-                  },
-                ),
-                const Gap(22),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF111C2E)
-                        : Colors.white.withValues(alpha: 0.96),
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(
-                      color: spotlight.color.withValues(alpha: 0.16),
-                    ),
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Session Progress',
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
-                          const Spacer(),
-                          Text(
-                            '${(progress * 100).round()}%',
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(
-                                  color: spotlight.color,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                        ],
-                      ),
-                      const Gap(12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: progress.clamp(0, 1),
-                          minHeight: 8,
-                          backgroundColor:
-                              Theme.of(context).brightness == Brightness.dark
-                              ? AppColors.darkMuted
-                              : AppColors.muted,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            spotlight.color,
-                          ),
-                        ),
-                      ),
-                      const Gap(12),
-                      Text(
-                        remainingWeeks == 0 && totalWeeks > 0
-                            ? 'You cleared the full session and earned every weekly badge.'
-                            : '$remainingWeeks week${remainingWeeks == 1 ? '' : 's'} remaining before you finish the journey.',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: _muted(context),
-                          height: 1.55,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                AppCard(
+                  radius: 24,
+                  padding: const EdgeInsets.fromLTRB(8, 30, 8, 8),
+                  child: _JourneyPath(
+                    journey: journey,
+                    onOpen: (week) => _openBadge(context, journey, week),
                   ),
                 ),
               ],
@@ -812,6 +711,508 @@ class CertificatesScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  void _openBadge(BuildContext context, _BadgeJourney journey, int week) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).cardColor,
+      builder: (sheetContext) => _BadgeSheet(
+        journey: journey,
+        initialWeek: week,
+        onAddWeeks: () {
+          Navigator.of(sheetContext).pop();
+          context.push('/payment?mode=topup&returnTo=%2Fcertificates');
+        },
+      ),
+    );
+  }
+}
+
+/// Which badges exist for the course, how many are earned, and what each
+/// one's state and status line are.
+class _BadgeJourney {
+  _BadgeJourney(this.dashboard)
+    : badges = _buildWeeklyBadgeTimeline(dashboard),
+      paymentPending = dashboard.hasAnyPending {
+    earned = paymentPending
+        ? 0
+        : _completedWeeksForDashboard(dashboard).clamp(0, badges.length);
+    final now = DateTime.now();
+    for (final session in dashboard.unlockedSessions) {
+      if (session.endsAt.isAfter(now)) continue;
+      final current = earnedOn[session.week];
+      if (current == null || session.endsAt.isAfter(current)) {
+        earnedOn[session.week] = session.endsAt;
+      }
+    }
+  }
+
+  final StudentDashboardSnapshot dashboard;
+  final List<_WeeklyBadgeMilestone> badges;
+  final bool paymentPending;
+  late final int earned;
+
+  /// When each week's last class ended, for "Earned on 26 Sept".
+  final Map<int, DateTime> earnedOn = {};
+
+  MedalState stateOf(_WeeklyBadgeMilestone badge) {
+    if (badge.week < earned) return MedalState.earned;
+    if (badge.week == earned) return MedalState.latest;
+    if (badge.week == earned + 1) return MedalState.next;
+    return MedalState.locked;
+  }
+
+  bool isLit(_WeeklyBadgeMilestone badge) {
+    final state = stateOf(badge);
+    return state == MedalState.earned || state == MedalState.latest;
+  }
+
+  String statusOf(_WeeklyBadgeMilestone badge) {
+    if (badge.week <= earned) {
+      final on = earnedOn[badge.week];
+      return on == null
+          ? 'Earned after week ${badge.week}'
+          : 'Earned on ${DateFormat('d MMM').format(on)}';
+    }
+    if (paymentPending) return 'Pay for your weeks to start earning badges';
+    if (badge.week > dashboard.paidWeeks) {
+      return 'Add week ${badge.week} to earn it';
+    }
+    return 'Earn it after your week ${badge.week} class';
+  }
+
+  bool canAddWeeksFor(_WeeklyBadgeMilestone badge) =>
+      !paymentPending && badge.week > dashboard.paidWeeks && dashboard.canTopUp;
+}
+
+/// The badges on a winding path, two per row: left to right, then back.
+/// The walked part is teal; the rest is a dotted trail.
+class _JourneyPath extends StatelessWidget {
+  const _JourneyPath({required this.journey, required this.onOpen});
+
+  final _BadgeJourney journey;
+  final ValueChanged<int> onOpen;
+
+  static const _cols = 2;
+  static const _row = 184.0;
+  static const _top = 58.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final badges = journey.badges;
+    final rows = (badges.length / _cols).ceil();
+    final height = _top + (rows - 1) * _row + 128;
+    final theme = Theme.of(context);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final points = [
+          for (var i = 0; i < badges.length; i++)
+            () {
+              final r = i ~/ _cols;
+              final c = r.isEven ? i % _cols : _cols - 1 - (i % _cols);
+              return Offset((c + 0.5) * width / _cols, _top + r * _row);
+            }(),
+        ];
+        return SizedBox(
+          height: height,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _TrailPainter(
+                    points: points,
+                    earned: journey.earned,
+                    width: width,
+                    trail: theme.brightness == Brightness.dark
+                        ? const Color(0xFF475569)
+                        : const Color(0xFFC2CDDC),
+                  ),
+                ),
+              ),
+              for (var i = 0; i < badges.length; i++)
+                Positioned(
+                  left: points[i].dx - 72,
+                  top: points[i].dy - 40,
+                  width: 144,
+                  child: _JourneyStop(
+                    badge: badges[i],
+                    journey: journey,
+                    onTap: () => onOpen(badges[i].week),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _JourneyStop extends StatelessWidget {
+  const _JourneyStop({
+    required this.badge,
+    required this.journey,
+    required this.onTap,
+  });
+
+  final _WeeklyBadgeMilestone badge;
+  final _BadgeJourney journey;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final state = journey.stateOf(badge);
+    final lit = journey.isLit(badge);
+    return Semantics(
+      button: true,
+      label:
+          'Week ${badge.week}, ${badge.title}. ${journey.statusOf(badge)}. Open details.',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          children: [
+            SizedBox(
+              height: 92,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.topCenter,
+                children: [
+                  BadgeMedal(
+                    tier: badge.tier,
+                    color: badge.color,
+                    state: state,
+                    size: 80,
+                  ),
+                  if (state == MedalState.latest || state == MedalState.next)
+                    Positioned(
+                      top: -12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: state == MedalState.latest
+                              ? AppColors.deepBlue
+                              : AppColors.teal,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          state == MedalState.latest ? 'LATEST' : 'UP NEXT',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const Gap(6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: theme.cardColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'WEEK ${badge.week}',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: _muted(context),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    badge.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: lit ? null : _muted(context),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (lit) ...[
+                        const Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: AppColors.tealDark,
+                        ),
+                        const Gap(3),
+                      ],
+                      Text(
+                        lit
+                            ? 'Earned'
+                            : state == MedalState.next
+                            ? 'Up next'
+                            : 'Locked',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: lit ? AppColors.tealDark : _muted(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrailPainter extends CustomPainter {
+  _TrailPainter({
+    required this.points,
+    required this.earned,
+    required this.width,
+    required this.trail,
+  });
+
+  final List<Offset> points;
+  final int earned;
+  final double width;
+  final Color trail;
+
+  Path _path(int from, int to) {
+    final path = Path()..moveTo(points[from].dx, points[from].dy);
+    for (var i = from + 1; i <= to; i++) {
+      final a = points[i - 1];
+      final b = points[i];
+      if ((a.dy - b.dy).abs() < 1) {
+        path.lineTo(b.dx, b.dy);
+      } else {
+        // Turning to the next row: swing out towards the edge.
+        final edge = a.dx > width / 2
+            ? a.dx + (width - a.dx) * 0.78
+            : a.dx * 0.22;
+        path.cubicTo(edge, a.dy, edge, b.dy, b.dx, b.dy);
+      }
+    }
+    return path;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final last = points.length - 1;
+    final ahead = _path(math.max(0, earned - 1), last);
+    final dot = Paint()..color = trail;
+    for (final metric in ahead.computeMetrics()) {
+      for (var d = 0.0; d < metric.length; d += 12) {
+        final at = metric.getTangentForOffset(d)?.position;
+        if (at != null) canvas.drawCircle(at, 2, dot);
+      }
+    }
+    if (earned >= 2) {
+      canvas.drawPath(
+        _path(0, earned - 1),
+        Paint()
+          ..color = AppColors.teal
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_TrailPainter old) =>
+      old.earned != earned ||
+      old.width != width ||
+      old.trail != trail ||
+      old.points.length != points.length;
+}
+
+/// A bigger look at one badge, with arrows to move through the rest.
+class _BadgeSheet extends StatefulWidget {
+  const _BadgeSheet({
+    required this.journey,
+    required this.initialWeek,
+    required this.onAddWeeks,
+  });
+
+  final _BadgeJourney journey;
+  final int initialWeek;
+  final VoidCallback onAddWeeks;
+
+  @override
+  State<_BadgeSheet> createState() => _BadgeSheetState();
+}
+
+class _BadgeSheetState extends State<_BadgeSheet> {
+  late int _index = widget.journey.badges
+      .indexWhere((b) => b.week == widget.initialWeek)
+      .clamp(0, widget.journey.badges.length - 1);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final journey = widget.journey;
+    final badges = journey.badges;
+    final badge = badges[_index];
+    final state = journey.stateOf(badge);
+    final lit = journey.isLit(badge);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: lit
+                  ? BoxDecoration(
+                      gradient: RadialGradient(
+                        colors: [
+                          badge.color.withValues(alpha: 0.28),
+                          badge.color.withValues(alpha: 0),
+                        ],
+                        stops: const [0, 0.62],
+                      ),
+                    )
+                  : null,
+              child: Center(
+                child: TweenAnimationBuilder<double>(
+                  key: ValueKey(badge.week),
+                  tween: Tween(begin: 0.8, end: 1),
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutBack,
+                  builder: (context, scale, child) =>
+                      Transform.scale(scale: scale, child: child),
+                  child: BadgeMedal(
+                    tier: badge.tier,
+                    color: badge.color,
+                    state: state,
+                    size: 150,
+                  ),
+                ),
+              ),
+            ),
+            const Gap(8),
+            Text(
+              badge.tier.toUpperCase(),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: lit ? AppColors.tealDark : _muted(context),
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const Gap(4),
+            Text(
+              badge.title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Gap(6),
+            Text(
+              badge.tagline,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _muted(context),
+              ),
+            ),
+            const Gap(14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              decoration: BoxDecoration(
+                color: lit
+                    ? AppColors.teal.withValues(alpha: 0.12)
+                    : (theme.brightness == Brightness.dark
+                          ? AppColors.darkMuted
+                          : AppColors.muted),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    lit ? Icons.check_rounded : Icons.lock_outline_rounded,
+                    size: 16,
+                    color: lit ? AppColors.tealDark : _muted(context),
+                  ),
+                  const Gap(6),
+                  Flexible(
+                    child: Text(
+                      journey.statusOf(badge),
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: lit ? AppColors.tealDark : null,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (journey.canAddWeeksFor(badge)) ...[
+              const Gap(16),
+              AppButton(
+                label: 'Add weeks',
+                trailing: const Icon(Icons.add_rounded, color: Colors.white),
+                onPressed: widget.onAddWeeks,
+              ),
+            ],
+            const Gap(14),
+            const Divider(height: 1),
+            Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _index > 0
+                        ? TextButton.icon(
+                            onPressed: () => setState(() => _index--),
+                            icon: const Icon(Icons.chevron_left_rounded),
+                            label: Text('Week ${badges[_index - 1].week}'),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+                Text(
+                  '${_index + 1} of ${badges.length}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _muted(context),
+                  ),
+                ),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: _index < badges.length - 1
+                        ? TextButton.icon(
+                            onPressed: () => setState(() => _index++),
+                            iconAlignment: IconAlignment.end,
+                            icon: const Icon(Icons.chevron_right_rounded),
+                            label: Text('Week ${badges[_index + 1].week}'),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -1325,86 +1726,84 @@ const _allWeeklyBadgeTemplates = <_WeeklyBadgeTemplate>[
   _WeeklyBadgeTemplate(
     badge: '🌱',
     title: 'First Step',
-    tagline: 'You showed up. That is where every serious journey begins.',
+    tagline: 'You showed up. That is everything.',
     color: Color(0xFF4ADE80),
     tier: 'Starter',
   ),
   _WeeklyBadgeTemplate(
     badge: '🔥',
     title: 'On Fire',
-    tagline: 'Momentum is building and your weekly rhythm is real now.',
+    tagline: 'Momentum is building. Keep it up.',
     color: Color(0xFFFB923C),
     tier: 'Ignited',
   ),
   _WeeklyBadgeTemplate(
     badge: '⚡',
     title: 'Live Wire',
-    tagline: 'You are in the zone and your effort is starting to compound.',
+    tagline: 'You are in the zone. Keep sparking.',
     color: Color(0xFFFACC15),
     tier: 'Charged',
   ),
   _WeeklyBadgeTemplate(
     badge: '🏅',
     title: 'One Month Strong',
-    tagline: 'A full month in. Your consistency is no longer accidental.',
+    tagline: 'A full month. You are built different.',
     color: Color(0xFFC084FC),
     tier: 'Milestone',
   ),
   _WeeklyBadgeTemplate(
     badge: '💪',
     title: 'Crushing It',
-    tagline: 'You keep showing up and the progress is starting to look loud.',
+    tagline: 'Look at you go. No slowing down.',
     color: Color(0xFFF472B6),
     tier: 'Crusher',
   ),
   _WeeklyBadgeTemplate(
     badge: '🌊',
     title: 'Halfway Hero',
-    tagline:
-        'Past the midpoint. You have carried this journey too far to stop.',
+    tagline: 'Past the midpoint. You are doing this.',
     color: Color(0xFF38BDF8),
     tier: 'Midpoint',
   ),
   _WeeklyBadgeTemplate(
     badge: '🎯',
     title: 'Locked In',
-    tagline: 'Focused, consistent, and steadily turning effort into mastery.',
+    tagline: 'Focused. Consistent. Unstoppable.',
     color: Color(0xFFFB7185),
     tier: 'Focused',
   ),
   _WeeklyBadgeTemplate(
     badge: '🦅',
     title: 'Soaring',
-    tagline: 'You are moving with confidence now and it shows in every week.',
+    tagline: 'Flying high. Nothing stopping you now.',
     color: Color(0xFF818CF8),
     tier: 'Elevated',
   ),
   _WeeklyBadgeTemplate(
     badge: '💎',
     title: 'Diamond Grit',
-    tagline: 'Pressure reveals the sharpest learners and you are proving it.',
+    tagline: 'Pressure makes diamonds. You are proof.',
     color: Color(0xFF67E8F9),
     tier: 'Diamond',
   ),
   _WeeklyBadgeTemplate(
     badge: '🚀',
     title: 'Launch Mode',
-    tagline:
-        'Final stretch energy. You are building toward a confident finish.',
+    tagline: 'Final stretch. You are in launch mode.',
     color: Color(0xFFA78BFA),
     tier: 'Launch',
   ),
   _WeeklyBadgeTemplate(
     badge: '⭐',
     title: 'Almost Legendary',
-    tagline: 'One step left. You have done too much work to coast now.',
+    tagline: 'One step left. Leave nothing behind.',
     color: Color(0xFFFBBF24),
     tier: 'Legend',
   ),
   _WeeklyBadgeTemplate(
     badge: '🏆',
     title: 'Champion',
-    tagline: 'You completed the full session and earned every single week.',
+    tagline: 'You did it. Every single week. Champion.',
     color: Color(0xFFF59E0B),
     tier: 'Champion',
   ),
@@ -1477,217 +1876,3 @@ List<_WeeklyBadgeTemplate> _templatesForProgramLength(int totalWeeks) {
       .toList(growable: false);
 }
 
-_WeeklyBadgeMilestone _spotlightBadgeForTimeline(
-  List<_WeeklyBadgeMilestone> timeline,
-) {
-  if (timeline.isEmpty) return _fallbackBadge();
-  for (final item in timeline) {
-    if (!item.earned) return item;
-  }
-  return timeline.last;
-}
-
-_WeeklyBadgeMilestone _fallbackBadge() {
-  return const _WeeklyBadgeMilestone(
-    week: 1,
-    badge: '🌱',
-    title: 'First Step',
-    tagline:
-        'Your weekly journey badges will appear here as your cohort progresses.',
-    color: Color(0xFF4ADE80),
-    tier: 'Starter',
-    earned: false,
-  );
-}
-
-class _BadgeHeroStat extends StatelessWidget {
-  const _BadgeHeroStat({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.darkMutedForeground,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const Gap(6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _WeekBadgeTile extends StatelessWidget {
-  const _WeekBadgeTile({required this.item, required this.isSpotlight});
-
-  final _WeeklyBadgeMilestone item;
-  final bool isSpotlight;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isSpotlight
-        ? item.color.withValues(alpha: isDark ? 0.2 : 0.12)
-        : item.earned
-        ? (isDark ? const Color(0xFF111C2E) : Colors.white)
-        : (isDark ? const Color(0xFF0D1727) : const Color(0xFFF4F7FB));
-    final borderColor = isSpotlight
-        ? item.color
-        : item.earned
-        ? item.color.withValues(alpha: 0.22)
-        : Theme.of(context).dividerColor.withValues(alpha: 0.4);
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            backgroundColor,
-            item.color.withValues(
-              alpha: isSpotlight
-                  ? (isDark ? 0.12 : 0.06)
-                  : item.earned
-                  ? (isDark ? 0.07 : 0.03)
-                  : 0.01,
-            ),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor, width: isSpotlight ? 1.4 : 1),
-        boxShadow: isSpotlight
-            ? [
-                BoxShadow(
-                  color: item.color.withValues(alpha: isDark ? 0.22 : 0.14),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ]
-            : null,
-      ),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
-      child: Stack(
-        children: [
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Text(
-              item.earned ? '✦' : '·',
-              style: TextStyle(
-                color: item.color.withValues(alpha: item.earned ? 0.9 : 0.32),
-                fontSize: item.earned ? 12 : 15,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Column(
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSpotlight
-                          ? item.color.withValues(alpha: 0.18)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: isSpotlight
-                            ? item.color.withValues(alpha: 0.38)
-                            : Theme.of(
-                                context,
-                              ).dividerColor.withValues(alpha: 0.22),
-                      ),
-                    ),
-                    child: Text(
-                      'Wk ${item.week}',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: isSpotlight ? item.color : _muted(context),
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (item.earned)
-                    Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: item.color.withValues(alpha: 0.92),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: item.color.withValues(alpha: 0.32),
-                            blurRadius: 10,
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-              const Spacer(),
-              Text(
-                item.badge,
-                style: TextStyle(
-                  fontSize: isSpotlight ? 30 : 28,
-                  color: item.earned ? null : Colors.grey,
-                ),
-              ),
-              const Gap(8),
-              Text(
-                item.tier,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: item.earned
-                      ? _muted(context)
-                      : _muted(context).withValues(alpha: 0.72),
-                  fontWeight: FontWeight.w800,
-                  height: 1.25,
-                ),
-              ),
-              const Gap(8),
-              Text(
-                item.earned ? 'Earned' : 'Locked',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: item.earned
-                      ? item.color
-                      : _muted(context).withValues(alpha: 0.7),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
