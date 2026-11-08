@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
+import '../../core/widgets/course_ring.dart';
 import '../../core/widgets/states/app_state_widgets.dart';
 import '../cohorts/models/cohort_session_model.dart';
 import '../cohorts/presentation/session_status.dart';
@@ -264,7 +263,7 @@ class _CourseRing extends StatelessWidget {
           child: SizedBox.square(
             dimension: 236,
             child: CustomPaint(
-              painter: _RingPainter(states: states, lockedColor: locked),
+              painter: CourseRingPainter(states: states, lockedColor: locked),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -319,55 +318,6 @@ class _CourseRing extends StatelessWidget {
           ),
       ],
     );
-  }
-}
-
-class _RingPainter extends CustomPainter {
-  _RingPainter({required this.states, required this.lockedColor});
-
-  final List<CourseWeekState> states;
-  final Color lockedColor;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    const stroke = 22.0;
-    final rect = (Offset.zero & size).deflate(stroke / 2);
-    final count = states.length;
-    // Gap between segments, in radians; none when the course is one week.
-    final gap = count > 1 ? 0.07 : 0.0;
-    final sweep = 2 * math.pi / count;
-    for (var i = 0; i < count; i++) {
-      final paint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = stroke
-        ..color = switch (states[i]) {
-          CourseWeekState.done => AppColors.teal,
-          CourseWeekState.current => AppColors.orange,
-          CourseWeekState.unlocked => AppColors.tealLight.withValues(
-            alpha: 0.6,
-          ),
-          CourseWeekState.locked => lockedColor,
-        };
-      canvas.drawArc(
-        rect,
-        -math.pi / 2 + i * sweep + gap / 2,
-        sweep - gap,
-        false,
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_RingPainter old) =>
-      old.lockedColor != lockedColor || !_sameStates(old.states, states);
-
-  static bool _sameStates(List<CourseWeekState> a, List<CourseWeekState> b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
   }
 }
 

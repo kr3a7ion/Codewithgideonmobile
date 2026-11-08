@@ -1,10 +1,13 @@
 import '../../../core/models/learning_models.dart';
+import '../../../core/widgets/course_ring.dart';
 import '../../catalog/models/course_model.dart';
 import '../../catalog/models/path_model.dart';
 import '../../cohorts/models/active_cohort_model.dart';
 import '../../cohorts/models/cohort_session_model.dart';
 import '../../cohorts/presentation/session_status.dart';
 import '../../student/models/student_profile_model.dart';
+
+export '../../../core/widgets/course_ring.dart' show CourseWeekState;
 
 class StudentDashboardSnapshot {
   const StudentDashboardSnapshot({
@@ -113,8 +116,6 @@ class StudentDashboardSnapshot {
     return 'Class Status';
   }
 }
-
-enum CourseWeekState { done, current, unlocked, locked }
 
 extension<T> on List<T> {
   T? get firstOrNull => isEmpty ? null : first;

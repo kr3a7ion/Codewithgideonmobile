@@ -9,6 +9,7 @@ import '../../core/state/app_providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/widgets/app_controls.dart';
 import '../../core/widgets/app_scaffold.dart';
+import '../../core/widgets/course_ring.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -269,126 +270,140 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 class WelcomeScreen extends ConsumerWidget {
   const WelcomeScreen({super.key});
 
+  // Four weeks done, this week live, the rest to come.
+  static const _ring = [
+    CourseWeekState.done,
+    CourseWeekState.done,
+    CourseWeekState.done,
+    CourseWeekState.done,
+    CourseWeekState.current,
+    CourseWeekState.locked,
+    CourseWeekState.locked,
+    CourseWeekState.locked,
+    CourseWeekState.locked,
+    CourseWeekState.locked,
+    CourseWeekState.locked,
+    CourseWeekState.locked,
+  ];
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authControllerProvider);
+    final theme = Theme.of(context);
 
     return AppScreen(
       body: Stack(
         children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.white, AppColors.background, Color(0xFFEFF6FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-          ),
-          _GlowOrb(
-            color: AppColors.teal,
-            size: 260,
-            top: 70,
-            right: -60,
-            opacity: 0.18,
-          ),
-          _GlowOrb(
-            color: AppColors.deepBlue,
-            size: 280,
-            bottom: 120,
-            left: -70,
-            opacity: 0.16,
-          ),
+          _AuthBackdrop(),
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  const BrandHeroLockup(
-                    markSize: 110,
-                    wordmarkHeight: 28,
-                    wordmarkColor: AppColors.foreground,
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 36,
                   ),
-                  const Gap(24),
-                  Text(
-                    'Master coding with live classes, expert mentors, and a thriving community.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.mutedForeground,
-                      height: 1.6,
-                    ),
-                  ),
-                  const Gap(24),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: const [
-                      _FeaturePill(label: 'Live Classes'),
-                      _FeaturePill(label: 'Pay As You Go'),
-                      _FeaturePill(label: 'Pay Full Optional'),
-                    ],
-                  ),
-                  const Spacer(),
-                  AppButton(
-                    label: 'Create Account',
-                    leading: const Icon(
-                      Icons.person_add_alt_1_rounded,
-                      color: Colors.white,
-                    ),
-                    onPressed: () => context.go('/signup'),
-                  ),
-                  const Gap(12),
-                  _GoogleAuthButton(
-                    isLoading: authState.isLoading,
-                    onPressed: authState.isLoading
-                        ? null
-                        : () => _handleGoogleStudentAuth(context, ref),
-                  ),
-                  const Gap(14),
-                  AppButton(
-                    label: 'Sign In',
-                    leading: const Icon(
-                      Icons.login_rounded,
-                      color: AppColors.deepBlue,
-                    ),
-                    variant: AppButtonVariant.outline,
-                    onPressed: () => context.go('/login'),
-                  ),
-                  const Gap(20),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      Text(
-                        'By continuing, you agree to our Terms and',
-                        style: Theme.of(context).textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                      ),
-                      InkWell(
-                        onTap: () => context.push('/privacy'),
-                        borderRadius: BorderRadius.circular(999),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 2,
-                          ),
-                          child: Text(
-                            'Privacy Policy',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: AppColors.deepBlue,
-                                  fontWeight: FontWeight.w800,
+                  child: IntrinsicHeight(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const BrandMark(size: 48, showBadge: false),
+                        const Gap(20),
+                        Center(
+                          child: SizedBox.square(
+                            dimension: 220,
+                            child: CustomPaint(
+                              painter: CourseRingPainter(
+                                states: _ring,
+                                lockedColor: const Color(0xFFC9D3E1),
+                              ),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '12',
+                                      style: theme.textTheme.displayLarge
+                                          ?.copyWith(fontSize: 64, height: 1),
+                                    ),
+                                    Text(
+                                      'weeks, live',
+                                      style: theme.textTheme.bodyMedium
+                                          ?.copyWith(
+                                            color: AppColors.mutedForeground,
+                                          ),
+                                    ),
+                                  ],
                                 ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        const Gap(28),
+                        Text(
+                          'Learn to build apps, live, one week at a time.',
+                          style: theme.textTheme.displaySmall,
+                        ),
+                        const Gap(14),
+                        Text(
+                          'Live classes with Gideon, every class recorded, and a mentor who answers your questions. Pay weekly.',
+                          style: theme.textTheme.bodyLarge?.copyWith(
+                            color: AppColors.mutedForeground,
+                            height: 1.55,
+                          ),
+                        ),
+                        const Spacer(),
+                        const Gap(24),
+                        AppButton(
+                          label: 'Get started',
+                          trailing: const Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white,
+                          ),
+                          onPressed: () => context.go('/signup'),
+                        ),
+                        const Gap(10),
+                        _GoogleAuthButton(
+                          isLoading: authState.isLoading,
+                          onPressed: authState.isLoading
+                              ? null
+                              : () => _handleGoogleStudentAuth(context, ref),
+                        ),
+                        const Gap(8),
+                        Center(
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                'Already a student?',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: AppColors.mutedForeground,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => context.go('/login'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.teal,
+                                ),
+                                child: const Text('Sign in'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Center(
+                          child: TextButton(
+                            onPressed: () => context.push('/privacy'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: AppColors.mutedForeground,
+                              textStyle: theme.textTheme.bodySmall,
+                            ),
+                            child: const Text('Privacy Policy'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -471,97 +486,98 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         children: [
           _AuthBackdrop(),
           SafeArea(
-            top: false,
             child: SingleChildScrollView(
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(22, 30, 22, 28),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  _BackCircle(onTap: () => context.go('/welcome')),
                   const Gap(18),
                   Text(
-                    'Welcome back!',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                    'Welcome back',
+                    style: Theme.of(context).textTheme.displaySmall,
                   ),
                   const Gap(8),
                   Text(
-                    'Sign in to continue your learning journey.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    'Sign in to see your classes and recordings.',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: AppColors.mutedForeground,
                     ),
                   ),
-
-                  const Gap(32),
-                  AppTextField(
-                    label: 'Email Address',
-                    hint: 'Enter your email',
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    prefixIcon: Icons.mail_outline_rounded,
-                  ),
-                  const Gap(18),
-                  AppTextField(
-                    label: 'Password',
-                    hint: 'Enter your password',
-                    controller: _passwordController,
-                    obscureText: _obscure,
-                    prefixIcon: Icons.lock_outline_rounded,
-                    suffix: IconButton(
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                      icon: Icon(
-                        _obscure
-                            ? Icons.visibility_off_rounded
-                            : Icons.visibility_rounded,
-                      ),
-                    ),
-                  ),
-                  const Gap(10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => context.go('/forgot-password'),
-                      child: const Text('Forgot Password?'),
-                    ),
-                  ),
-                  const Gap(10),
-                  AppButton(
-                    label: 'Sign In',
-                    isLoading: authState.isLoading,
-                    onPressed: authState.isLoading ? null : _login,
-                  ),
-                  const Gap(12),
+                  const Gap(22),
                   _GoogleAuthButton(
                     isLoading: authState.isLoading,
                     onPressed: authState.isLoading ? null : _loginWithGoogle,
                   ),
+                  const Gap(16),
+                  const _OrDivider(),
+                  const Gap(16),
+                  AppTextField(
+                    label: 'Email',
+                    hint: 'you@example.com',
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    prefixIcon: Icons.mail_outline_rounded,
+                  ),
+                  const Gap(16),
+                  AppTextField(
+                    label: 'Password',
+                    hint: 'Your password',
+                    controller: _passwordController,
+                    obscureText: _obscure,
+                    prefixIcon: Icons.key_outlined,
+                    suffix: IconButton(
+                      tooltip: _obscure ? 'Show password' : 'Hide password',
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => context.go('/forgot-password'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.teal,
+                      ),
+                      child: const Text('Forgot password?'),
+                    ),
+                  ),
                   if (authState.errorMessage != null) ...[
-                    const Gap(14),
+                    const Gap(6),
                     _AuthStatusCard(
                       message: authState.errorMessage!,
                       tone: _AuthStatusTone.error,
                     ),
                   ],
-                  const Gap(30),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          "Don't have an account?",
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
+                  const Gap(24),
+                  AppButton(
+                    label: 'Sign in',
+                    isLoading: authState.isLoading,
+                    onPressed: authState.isLoading ? null : _login,
                   ),
-                  const Gap(10),
+                  const Gap(8),
                   Center(
-                    child: TextButton(
-                      onPressed: () => context.go('/signup'),
-                      child: const Text('Create Account'),
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'New here?',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(color: AppColors.mutedForeground),
+                        ),
+                        TextButton(
+                          onPressed: () => context.go('/signup'),
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.teal,
+                          ),
+                          child: const Text('Get started'),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1888,31 +1904,6 @@ class _GoogleMarkPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class _FeaturePill extends StatelessWidget {
-  const _FeaturePill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.84),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: AppColors.teal.withValues(alpha: 0.18)),
-        boxShadow: AppShadows.card,
-      ),
-      child: Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelLarge?.copyWith(color: AppColors.foreground),
-      ),
-    );
-  }
-}
-
 String _friendlyEntryError(Object error) {
   final raw = '$error'.replaceFirst('Exception: ', '').trim();
   if (raw.contains('permission-denied') ||
@@ -2060,10 +2051,74 @@ Future<void> _settleKeyboardBeforeRouteChange(BuildContext context) async {
   await Future<void>.delayed(const Duration(milliseconds: 140));
 }
 
+/// The app's light teal wash, behind the sign-in and sign-up screens.
 class _AuthBackdrop extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return const AppAtmosphereBackdrop();
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return const AppAtmosphereBackdrop();
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0, 0.5],
+          colors: [
+            Color.alphaBlend(
+              AppColors.teal.withValues(alpha: 0.12),
+              AppColors.background,
+            ),
+            AppColors.background,
+          ],
+        ),
+      ),
+      child: const SizedBox.expand(),
+    );
+  }
+}
+
+class _BackCircle extends StatelessWidget {
+  const _BackCircle({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Back',
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: CircleAvatar(
+          radius: 22,
+          backgroundColor: Theme.of(context).cardColor,
+          child: Icon(
+            Icons.arrow_back_rounded,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrDivider extends StatelessWidget {
+  const _OrDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text('or', style: Theme.of(context).textTheme.bodySmall),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
   }
 }
 
