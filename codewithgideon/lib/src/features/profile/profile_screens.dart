@@ -66,7 +66,6 @@ class ProfileScreen extends ConsumerWidget {
     return dashboardState.when(
       loading: () => const DoubleBackToExitScope(
         child: SafeArea(
-          top: false,
           child: AppLoadingState(
             compact: true,
             title: 'Loading your profile...',
@@ -76,7 +75,6 @@ class ProfileScreen extends ConsumerWidget {
       ),
       error: (error, _) => DoubleBackToExitScope(
         child: SafeArea(
-          top: false,
           child: AppErrorState(
             compact: true,
             title: 'Profile unavailable',
@@ -86,234 +84,336 @@ class ProfileScreen extends ConsumerWidget {
         ),
       ),
       data: (dashboard) {
+        final theme = Theme.of(context);
         final profile = dashboard.profile;
         final initials = _initialsFromName(profile.fullName);
-        final progressPercent = (dashboard.progressPercent * 100).round();
-        final joinedLabel = DateFormat('MMM d, y').format(profile.joinedAt);
-        final memberStatus = dashboard.hasAnyPending
-            ? 'Pending access'
-            : 'Active member';
-        final memberStatusColor = dashboard.hasAnyPending
-            ? AppColors.orangeLight
-            : AppColors.tealLight;
+        final badges = _buildWeeklyBadgeTimeline(dashboard);
+        final earned = badges.where((badge) => badge.earned).length;
 
         return DoubleBackToExitScope(
-          child: Stack(
-            children: [
-              const AppAtmosphereBackdrop(),
-              SafeArea(
-                top: false,
-                bottom: false,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(22, 30, 22, 130),
+          child: SafeArea(
+            bottom: false,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+              children: [
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      shape: BoxShape.circle,
+                      boxShadow: AppShadows.card,
+                    ),
+                    child: CircleAvatar(
+                      radius: 38,
+                      backgroundColor: AppColors.teal,
+                      child: Text(
+                        initials.isEmpty ? 'C' : initials,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const Gap(12),
+                Text(
+                  profile.fullName,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Gap(4),
+                Text(
+                  '${dashboard.path.title} · ${dashboard.activeCohort.label}',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _muted(context),
+                  ),
+                ),
+                const Gap(20),
+                _YourWeeksCard(dashboard: dashboard),
+                const Gap(22),
+                Row(
                   children: [
-                    AppCard(
-                      padding: EdgeInsets.zero,
-                      radius: 34,
-                      color: Theme.of(
-                        context,
-                      ).cardColor.withValues(alpha: 0.88),
-                      shadow: AppShadows.premium,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppColors.deepBlueDark,
-                              AppColors.deepBlue,
-                              AppColors.tealDark,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(34),
-                        ),
-                        padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 78,
-                                  height: 78,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.14,
-                                      ),
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    initials.isEmpty ? 'C' : initials,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineSmall
-                                        ?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                  ),
-                                ),
-                                const Gap(16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _ProfileHeadlinePill(
-                                        label: memberStatus,
-                                        color: memberStatusColor,
-                                      ),
-                                      const Gap(12),
-                                      Text(
-                                        profile.fullName,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.copyWith(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                      const Gap(6),
-                                      Text(
-                                        profile.email,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyMedium
-                                            ?.copyWith(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.76,
-                                              ),
-                                            ),
-                                      ),
-                                      const Gap(4),
-                                      Text(
-                                        '${dashboard.path.title} • ${dashboard.activeCohort.label}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: Colors.white.withValues(
-                                                alpha: 0.68,
-                                              ),
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Gap(12),
-
-                                PremiumIconButton(
-                                  icon: Icons.settings_rounded,
-                                  isDark: true,
-                                  onTap: () => context.push('/settings'),
-                                ),
-                              ],
-                            ),
-                            const Gap(22),
-                            AdaptiveWrap(
-                              minItemWidth: 110,
-                              spacing: 10,
-                              runSpacing: 10,
-                              children: [
-                                _ProfileHeroStat(
-                                  label: 'Weeks unlocked',
-                                  value:
-                                      '${dashboard.paidWeeks}/${dashboard.totalProgramWeeks}',
-                                  accent: AppColors.orangeLight,
-                                ),
-                                _ProfileHeroStat(
-                                  label: 'Progress',
-                                  value: '$progressPercent%',
-                                  accent: AppColors.tealLight,
-                                ),
-                                _ProfileHeroStat(
-                                  label: 'Email',
-                                  value: authState.isEmailVerified
-                                      ? 'Verified'
-                                      : 'Pending',
-                                  accent: authState.isEmailVerified
-                                      ? AppColors.tealLight
-                                      : AppColors.orangeLight,
-                                ),
-                              ],
-                            ),
-                          ],
+                    Expanded(
+                      child: Text(
+                        'Badges',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    const Gap(16),
-
-                    AppCard(
-                      radius: 28,
-                      color: Theme.of(
-                        context,
-                      ).cardColor.withValues(alpha: 0.82),
-                      child: Column(
-                        children: [
-                          _ProfileDetailRow(
-                            label: 'Member since',
-                            value: joinedLabel,
-                            icon: Icons.calendar_today_outlined,
-                          ),
-                          const Gap(18),
-                          _ProfileDetailRow(
-                            label: 'Phone',
-                            value: profile.phone,
-                            icon: Icons.call_outlined,
-                          ),
-                          const Gap(18),
-                          _ProfileDetailRow(
-                            label: 'Current cohort',
-                            value: dashboard.activeCohort.label,
-                            icon: Icons.groups_2_outlined,
-                          ),
-                        ],
+                    TextButton(
+                      onPressed: () => context.push('/certificates'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.teal,
                       ),
-                    ),
-                    const Gap(16),
-                    const _StayConnectedCard(),
-                    const Gap(16),
-                    AppCard(
-                      radius: 28,
-                      color: Theme.of(
-                        context,
-                      ).cardColor.withValues(alpha: 0.82),
-                      child: Column(
-                        children: [
-                          _ProfileAction(
-                            icon: Icons.workspace_premium_outlined,
-                            title: 'Weekly Badges',
-                            subtitle:
-                                'Track every earned week and your next milestone',
-                            onTap: () => context.push('/certificates'),
-                          ),
-                          const Divider(height: 22),
-                          _ProfileAction(
-                            icon: Icons.settings_outlined,
-                            title: 'Settings',
-                            subtitle:
-                                'Notifications, theme, and app preferences',
-                            onTap: () => context.push('/settings'),
-                          ),
-                        ],
-                      ),
+                      child: Text('$earned of ${badges.length}'),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const Gap(6),
+                Row(
+                  children: [
+                    for (final badge in badges.take(4))
+                      Expanded(
+                        child: InkWell(
+                          onTap: () => context.push('/certificates'),
+                          borderRadius: BorderRadius.circular(16),
+                          child: Column(
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: badge.earned
+                                      ? AppColors.orange.withValues(alpha: 0.12)
+                                      : (theme.brightness == Brightness.dark
+                                            ? AppColors.darkMuted
+                                            : AppColors.muted),
+                                  border: badge.earned
+                                      ? Border.all(
+                                          color: AppColors.orange,
+                                          width: 2,
+                                        )
+                                      : null,
+                                ),
+                                child: Opacity(
+                                  opacity: badge.earned ? 1 : 0.4,
+                                  child: Text(
+                                    badge.badge,
+                                    style: const TextStyle(fontSize: 24),
+                                  ),
+                                ),
+                              ),
+                              const Gap(6),
+                              Text(
+                                badge.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontWeight: badge.earned
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: badge.earned ? null : _muted(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const Gap(18),
+                AppCard(
+                  radius: 24,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  child: Column(
+                    children: [
+                      _ProfileAction(
+                        icon: Icons.person_outline_rounded,
+                        title: 'Your details',
+                        subtitle: profile.phone.trim().isEmpty
+                            ? profile.email
+                            : '${profile.email} · ${profile.phone}',
+                        onTap: () => context.push('/profile/edit'),
+                      ),
+                      const Divider(height: 1),
+                      _ProfileAction(
+                        icon: Icons.notifications_none_rounded,
+                        title: 'Notifications and settings',
+                        subtitle: 'Class reminders, theme',
+                        onTap: () => context.push('/settings'),
+                      ),
+                      const Divider(height: 1),
+                      _ProfileAction(
+                        icon: Icons.verified_user_outlined,
+                        title: 'Sign-in and security',
+                        subtitle: authState.isEmailVerified
+                            ? 'Email verified'
+                            : 'Email not verified yet',
+                        onTap: () => context.push('/settings'),
+                      ),
+                      for (final link in _contactLinks) ...[
+                        const Divider(height: 1),
+                        _ProfileAction(
+                          icon: link.icon,
+                          title: link.title == 'WhatsApp' ? 'Help' : link.title,
+                          subtitle: link.title == 'WhatsApp'
+                              ? 'Message us on WhatsApp'
+                              : link.subtitle,
+                          onTap: () => _openContactLink(context, link.url),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const Gap(16),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await ref.read(authControllerProvider.notifier).logout();
+                      if (!context.mounted) return;
+                      context.go('/welcome');
+                    },
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.danger,
+                    ),
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Sign out'),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
 }
+
+/// Paid weeks out of the course, with Add weeks when more can be bought.
+class _YourWeeksCard extends StatelessWidget {
+  const _YourWeeksCard({required this.dashboard});
+
+  final StudentDashboardSnapshot dashboard;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final pending = dashboard.hasAnyPending;
+    final remainingPrice =
+        dashboard.remainingWeeks * dashboard.course.pricePerWeek;
+    final String message;
+    if (pending) {
+      message = 'Your weeks unlock once your payment is confirmed.';
+    } else if (dashboard.remainingWeeks == 0) {
+      message = 'You have the whole course. Nice.';
+    } else if (remainingPrice > 0) {
+      message =
+          '${_naira(remainingPrice)} unlocks the rest of the course.';
+    } else {
+      message = 'Add weeks to unlock the rest of the course.';
+    }
+
+    return AppCard(
+      radius: 26,
+      padding: const EdgeInsets.all(18),
+      shadow: AppShadows.card,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Your weeks',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: _muted(context),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: (pending ? AppColors.orange : AppColors.teal)
+                      .withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  pending ? 'Pending' : 'Active',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: pending ? AppColors.orange : AppColors.tealDark,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${dashboard.paidWeeks}',
+                style: theme.textTheme.displaySmall,
+              ),
+              const Gap(8),
+              Text(
+                'of ${dashboard.totalProgramWeeks} unlocked',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: _muted(context),
+                ),
+              ),
+            ],
+          ),
+          const Gap(12),
+          Row(
+            children: [
+              for (final state in dashboard.weekStates)
+                Expanded(
+                  child: Container(
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: switch (state) {
+                        CourseWeekState.done => AppColors.teal,
+                        CourseWeekState.current => AppColors.orange,
+                        CourseWeekState.unlocked =>
+                          AppColors.tealLight.withValues(alpha: 0.6),
+                        CourseWeekState.locked =>
+                          theme.brightness == Brightness.dark
+                              ? AppColors.darkMuted
+                              : const Color(0xFFC9D3E1),
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const Gap(12),
+          Text(
+            message,
+            style: theme.textTheme.bodySmall?.copyWith(color: _muted(context)),
+          ),
+          if (dashboard.canTopUp) ...[
+            const Gap(14),
+            AppButton(
+              label: 'Add weeks',
+              trailing: const Icon(Icons.add_rounded, color: Colors.white),
+              onPressed: () =>
+                  context.push('/payment?mode=topup&returnTo=%2Fprofile'),
+            ),
+          ] else if (pending &&
+              dashboard.profile.pendingPayment == null &&
+              dashboard.profile.weeksToCommit > 0) ...[
+            const Gap(14),
+            AppButton(
+              label: 'Complete payment',
+              onPressed: () =>
+                  context.push('/payment?mode=initial&returnTo=%2Fprofile'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+String _naira(int amount) => '₦${NumberFormat.decimalPattern().format(amount)}';
 
 class CertificatesScreen extends ConsumerWidget {
   const CertificatesScreen({super.key});
@@ -953,169 +1053,6 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-class _StayConnectedCard extends StatelessWidget {
-  const _StayConnectedCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return AppCard(
-      radius: 28,
-      color: Theme.of(context).cardColor.withValues(alpha: 0.82),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Stay connected',
-            style: Theme.of(
-              context,
-            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const Gap(8),
-          Text(
-            'Follow the community, get quick updates, or chat with the team when you need help.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: _muted(context)),
-          ),
-          const Gap(18),
-          for (var index = 0; index < _contactLinks.length; index++) ...[
-            _ProfileAction(
-              icon: _contactLinks[index].icon,
-              title: _contactLinks[index].title,
-              subtitle: _contactLinks[index].subtitle,
-              onTap: () => _openContactLink(context, _contactLinks[index].url),
-            ),
-            if (index != _contactLinks.length - 1) const Divider(height: 18),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileHeadlinePill extends StatelessWidget {
-  const _ProfileHeadlinePill({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: Colors.white,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileHeroStat extends StatelessWidget {
-  const _ProfileHeroStat({
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Gap(8),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileDetailRow extends StatelessWidget {
-  const _ProfileDetailRow({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppColors.teal.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: AppColors.tealDark, size: 20),
-        ),
-        const Gap(12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: _muted(context),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Gap(4),
-              Text(
-                value,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _ProfileAction extends StatelessWidget {
   const _ProfileAction({
     required this.icon,
@@ -1135,7 +1072,7 @@ class _ProfileAction extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(22),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
           children: [
             Container(
